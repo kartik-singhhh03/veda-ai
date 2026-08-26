@@ -47,16 +47,25 @@ export async function POST(request: Request) {
       throw new ApiError("Invalid or missing candidates array.");
     }
 
+    const mapStarted = Date.now();
     const result = await runMappingPipeline(
       record.questions,
       record.candidates,
     );
 
+    console.info("[map-answers]", {
+      questionCount: record.questions.length,
+      candidateCount: record.candidates.length,
+      answeredCount: result.answers.filter((a) => a.status === "answered")
+        .length,
+      unmatchedCount: result.unmatchedCandidates.length,
+      totalMs: Date.now() - mapStarted,
+    });
+
     return NextResponse.json({
       answers: result.answers,
       unansweredQuestions: result.unansweredQuestions,
       unmatchedCandidates: result.unmatchedCandidates,
-      debugAnswers: result.debugAnswers,
     });
   } catch (error) {
     return jsonError(error);

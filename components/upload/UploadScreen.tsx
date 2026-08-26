@@ -43,7 +43,7 @@ export function UploadScreen({
 
         <UploadHero />
 
-        <div className="mt-2 flex w-full flex-col gap-4 sm:mt-1 sm:flex-row sm:gap-5">
+        <div className="mt-1 flex w-full flex-col gap-4 sm:mt-0 sm:flex-row sm:gap-5">
           <UploadCard
             label="Upload"
             accentLabel="Question Paper"

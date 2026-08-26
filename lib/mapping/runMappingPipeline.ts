@@ -80,6 +80,7 @@ export async function runMappingPipeline(
       regions: mapped.regions,
       confidence: mapped.confidence,
       status: "answered",
+      mappingMethod: mapped.mappingMethod,
     });
   }
 

@@ -5,8 +5,12 @@ import { AnswerSheetViewer } from "@/components/assessment/AnswerSheetViewer";
 import { QuestionList } from "@/components/assessment/QuestionList";
 import { SelectedQuestionPanel } from "@/components/assessment/SelectedQuestionPanel";
 import { UnmatchedAnswersPanel } from "@/components/assessment/UnmatchedAnswersPanel";
+import {
+  computeGradingSummary,
+  formatGradingCoverage,
+} from "@/lib/assessment/gradingSummary";
 import { gradeAnswerRequest } from "@/lib/client/extraction";
-import { getFirstRegionPage } from "@/lib/viewer/regions";
+import { clampPage, getFirstRegionPage } from "@/lib/viewer/regions";
 import type {
   Answer,
   AnswerCandidate,
@@ -60,6 +64,7 @@ export function AssessmentWorkspace({
     [unansweredQuestions],
   );
 
+  const mappedCount = answers.filter((a) => a.status === "answered").length;
   const initialQuestionId = questions[0]?.id ?? null;
 
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
@@ -85,6 +90,9 @@ export function AssessmentWorkspace({
     return map;
   }, [grades]);
 
+  // Clamp for display/navigation without resetting selectedQuestionId.
+  const safeCurrentPage = clampPage(currentPage, answerPages.length);
+
   const selectedQuestion =
     questions.find((question) => question.id === selectedQuestionId) ?? null;
   const selectedAnswer = selectedQuestionId
@@ -93,6 +101,11 @@ export function AssessmentWorkspace({
   const isUnanswered = selectedQuestionId
     ? unansweredIds.has(selectedQuestionId)
     : false;
+
+  const gradingSummary = useMemo(
+    () => computeGradingSummary(questions.length, Object.values(grades)),
+    [questions.length, grades],
+  );
 
   // On-demand grading with cache — do not re-request for the same question.
   useEffect(() => {
@@ -141,13 +154,14 @@ export function AssessmentWorkspace({
     setSelectedQuestionId(questionId);
     setGradingError(null);
 
+    // Jump only for answered questions with regions. Unanswered: do not jump.
     const page = findAnswerPage(
       answersByQuestionId,
       unansweredIds,
       questionId,
     );
     if (page != null) {
-      setCurrentPage(page);
+      setCurrentPage(clampPage(page, answerPages.length));
     }
 
     if (
@@ -158,17 +172,45 @@ export function AssessmentWorkspace({
     }
   }
 
+  function handlePageChange(page: number) {
+    // Manual navigation must not clear selectedQuestionId.
+    setCurrentPage(clampPage(page, answerPages.length));
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4 lg:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4 lg:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 space-y-2">
           <h1 className="text-lg font-semibold text-foreground">Assessment</h1>
-          <p className="text-xs text-muted">
-            {questions.length} questions ·{" "}
-            {answers.filter((a) => a.status === "answered").length} mapped ·{" "}
-            {unansweredQuestions.length} unanswered ·{" "}
-            {unmatchedCandidates.length} unmatched
-          </p>
+          <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
+            <span className="rounded-full bg-surface px-2.5 py-1 text-foreground">
+              {questions.length} Questions
+            </span>
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+              {mappedCount} Answered
+            </span>
+            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
+              {unansweredQuestions.length} Unanswered
+            </span>
+            <span className="rounded-full bg-orange-50 px-2.5 py-1 text-orange-700">
+              {unmatchedCandidates.length} Unmatched
+            </span>
+          </div>
+          {gradingSummary.gradedCount > 0 ? (
+            <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
+              <span className="rounded-full bg-surface px-2.5 py-1 text-foreground">
+                Graded: {gradingSummary.gradedCount} /{" "}
+                {gradingSummary.questionCount}
+              </span>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                Score: {gradingSummary.earnedScore} /{" "}
+                {gradingSummary.possibleScore}
+              </span>
+              <span className="rounded-full bg-surface px-2.5 py-1 text-muted">
+                Coverage: {formatGradingCoverage(gradingSummary)}
+              </span>
+            </div>
+          ) : null}
         </div>
         <button
           type="button"
@@ -210,9 +252,9 @@ export function AssessmentWorkspace({
         </button>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
+      <div className="grid min-h-0 min-w-0 flex-1 gap-4 lg:grid-cols-2">
         <div
-          className={`min-h-0 flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm ${
+          className={`min-h-0 min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-sm ${
             mobileTab === "questions" ? "flex" : "hidden"
           } lg:flex`}
         >
@@ -230,6 +272,7 @@ export function AssessmentWorkspace({
           />
           <QuestionList
             questions={questions}
+            answersByQuestionId={answersByQuestionId}
             unansweredIds={unansweredIds}
             gradesByQuestionId={gradesByQuestionId}
             selectedQuestionId={selectedQuestionId}
@@ -238,14 +281,14 @@ export function AssessmentWorkspace({
         </div>
 
         <div
-          className={`min-h-0 flex-col rounded-2xl border border-border bg-card p-4 shadow-sm ${
+          className={`min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-sm ${
             mobileTab === "answerSheet" ? "flex" : "hidden"
           } lg:flex`}
         >
           <AnswerSheetViewer
             pages={answerPages}
-            currentPage={currentPage}
-            onPageChange={setCurrentPage}
+            currentPage={safeCurrentPage}
+            onPageChange={handlePageChange}
             selectedAnswer={selectedAnswer}
             isUnanswered={isUnanswered}
             selectedQuestionLabel={selectedQuestion?.number ?? null}

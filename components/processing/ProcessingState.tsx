@@ -10,29 +10,23 @@ export function ProcessingState({
   return (
     <div className="flex flex-1 p-3 sm:p-4 lg:p-5">
       <div className="flex flex-1 items-center justify-center rounded-[28px] bg-card shadow-sm">
-        <div className="flex flex-col items-center px-6 py-16 text-center">
-          <div className="relative mb-6 h-16 w-20" aria-hidden>
+        <div className="flex flex-col items-center px-6 py-20 text-center">
+          <div className="relative mb-7 h-14 w-16" aria-hidden>
             <Sparkle
-              className="absolute left-1 top-2 h-7 w-7 animate-sparkle"
+              className="absolute left-0 top-3 h-6 w-6 animate-sparkle"
               style={{
                 background:
                   "linear-gradient(180deg, #ff8a5b 0%, #ff4d2e 100%)",
               }}
             />
             <Sparkle
-              className="absolute right-0 top-0 h-10 w-10 animate-sparkle-delayed"
+              className="absolute right-1 top-0 h-9 w-9 animate-sparkle-delayed"
               style={{
                 background:
                   "linear-gradient(180deg, #ff9a6b 0%, #ff5a35 100%)",
               }}
             />
-            <Sparkle
-              className="absolute bottom-0 left-7 h-5 w-5 animate-sparkle-delayed-more"
-              style={{
-                background:
-                  "linear-gradient(180deg, #ffb08a 0%, #ff6a3d 100%)",
-              }}
-            />
+            <span className="absolute bottom-1 left-8 h-2 w-2 rounded-full bg-accent animate-sparkle-delayed-more" />
           </div>
 
           <h2

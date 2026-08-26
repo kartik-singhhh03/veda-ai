@@ -1,5 +1,6 @@
 "use client";
 
+import { getMappingReviewLabel } from "@/lib/mapping/reviewStatus";
 import type { Answer, GradeResult, Question } from "@/types/assessment";
 
 type SelectedQuestionPanelProps = {
@@ -27,12 +28,35 @@ export function SelectedQuestionPanel({
     );
   }
 
+  const showFeedback =
+    grading || Boolean(gradingError) || Boolean(grade?.feedback);
+  const review = !isUnanswered ? getMappingReviewLabel(answer) : null;
+
   return (
     <div className="space-y-3 rounded-2xl border border-border bg-white p-4 shadow-sm">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Question {question.number}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Question {question.number}
+          </p>
+          {review ? (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                review.status === "high_confidence"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : review.status === "review_recommended"
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-surface text-muted"
+              }`}
+            >
+              {review.label}
+            </span>
+          ) : isUnanswered ? (
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+              Unanswered
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 text-sm leading-relaxed text-foreground">
           {question.text}
         </p>
@@ -55,33 +79,35 @@ export function SelectedQuestionPanel({
         )}
       </div>
 
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-          AI Feedback
-        </p>
-        {grading ? (
-          <p className="mt-1 text-sm text-muted">Grading...</p>
-        ) : gradingError ? (
-          <p
-            role="alert"
-            className="mt-1 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-danger"
-          >
-            Grading unavailable right now. You can still review the mapped
-            answer and highlight.
+      {showFeedback ? (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            AI Feedback
           </p>
-        ) : grade?.feedback ? (
-          <div className="mt-1 rounded-xl border border-accent/30 bg-accent-soft/40 px-3 py-2.5 text-sm leading-relaxed text-foreground/90">
-            {grade.feedback}
-            {grade.score !== null && grade.maxScore !== null ? (
-              <p className="mt-2 text-xs font-semibold text-foreground">
-                Score: {grade.score} / {grade.maxScore}
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <p className="mt-1 text-sm text-muted">No feedback yet.</p>
-        )}
-      </div>
+          {grading ? (
+            <p className="mt-1 text-sm text-muted" role="status">
+              Grading...
+            </p>
+          ) : gradingError ? (
+            <p
+              role="alert"
+              className="mt-1 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-danger"
+            >
+              Grading unavailable right now. You can still review the mapped
+              answer and highlight.
+            </p>
+          ) : grade?.feedback ? (
+            <div className="mt-1 rounded-xl border border-accent/30 bg-accent-soft/40 px-3 py-2.5 text-sm leading-relaxed text-foreground/90">
+              {grade.feedback}
+              {grade.score !== null && grade.maxScore !== null ? (
+                <p className="mt-2 text-xs font-semibold text-foreground">
+                  Score: {grade.score} / {grade.maxScore}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

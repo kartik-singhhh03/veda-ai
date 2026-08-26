@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+import { MAX_UPLOAD_BYTES } from "@/lib/limits";
 
 const ALLOWED_MIME = new Set([
   "application/pdf",
@@ -50,8 +49,11 @@ export async function readUploadFile(
     throw new ApiError("Uploaded file is empty.");
   }
 
-  if (value.size > MAX_FILE_SIZE_BYTES) {
-    throw new ApiError("File is too large. Maximum size is 10MB.");
+  if (value.size > MAX_UPLOAD_BYTES) {
+    throw new ApiError(
+      "Question paper or answer sheet is too large for the current deployment limit (max 4MB).",
+      413,
+    );
   }
 
   const fileName = value.name || "upload";

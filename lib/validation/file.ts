@@ -1,4 +1,4 @@
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/limits";
 
 const ALLOWED_EXTENSIONS = [".pdf", ".png", ".jpg", ".jpeg"] as const;
 
@@ -35,10 +35,11 @@ export function validateUploadFile(file: File): FileValidationResult {
     };
   }
 
-  if (file.size > MAX_FILE_SIZE_BYTES) {
+  if (file.size > MAX_UPLOAD_BYTES) {
     return {
       ok: false,
-      error: "File is too large. Maximum size is 10MB.",
+      error:
+        "File is too large for the current deployment limit (max 4MB).",
     };
   }
 
@@ -66,4 +67,5 @@ export function getAcceptAttribute(): string {
   return ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
 }
 
-export const MAX_FILE_SIZE_LABEL = "Max 10MB";
+export const MAX_FILE_SIZE_BYTES = MAX_UPLOAD_BYTES;
+export const MAX_FILE_SIZE_LABEL = MAX_UPLOAD_LABEL;

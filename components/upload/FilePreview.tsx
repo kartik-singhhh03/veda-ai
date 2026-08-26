@@ -14,10 +14,10 @@ type FilePreviewProps = {
 export function FilePreview({ file, onRemove }: FilePreviewProps) {
   const isPdf = isPdfFile(file);
   const sizeLabel = formatFileSize(file.size);
-  const pageLabel = isPdf ? null : "1 Page";
+  const metaLabel = isPdf ? "PDF" : "1 Page";
 
   return (
-    <div className="relative w-full max-w-[280px] rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+    <div className="relative w-full max-w-[280px] rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm">
       <button
         type="button"
         onClick={onRemove}
@@ -45,8 +45,7 @@ export function FilePreview({ file, onRemove }: FilePreviewProps) {
             {file.name}
           </p>
           <p className="mt-0.5 text-xs text-muted">
-            {sizeLabel}
-            {pageLabel ? ` • ${pageLabel}` : ""}
+            {sizeLabel} • {metaLabel}
           </p>
         </div>
       </div>

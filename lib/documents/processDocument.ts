@@ -7,7 +7,11 @@ let pdfjsReady: Promise<void> | null = null;
 
 async function ensurePdfjs(): Promise<void> {
   if (!pdfjsReady) {
-    pdfjsReady = definePDFJSModule(() => import("pdfjs-dist")).then(() => undefined);
+    // Node must use the PDF.js legacy build. The modern build throws in Node
+    // (e.g. "hashOriginal.toHex is not a function" / DOMMatrix issues).
+    pdfjsReady = definePDFJSModule(
+      () => import("pdfjs-dist/legacy/build/pdf.mjs"),
+    ).then(() => undefined);
   }
   await pdfjsReady;
 }
@@ -76,49 +80,82 @@ async function processImageDocument(
   mimeType: string,
   sourceName: string,
 ): Promise<ProcessedDocument> {
-  const imageMime = normalizeImageMime(mimeType);
-  const { width, height } = await readImageDimensions(bytes, imageMime);
+  try {
+    const imageMime = normalizeImageMime(mimeType);
+    const { width, height } = await readImageDimensions(bytes, imageMime);
 
-  const page: DocumentPage = {
-    pageNumber: 1,
-    mimeType: imageMime,
-    bytes,
-    width,
-    height,
-  };
+    const page: DocumentPage = {
+      pageNumber: 1,
+      mimeType: imageMime,
+      bytes,
+      width,
+      height,
+    };
 
-  return {
-    sourceName,
-    pageCount: 1,
-    pages: [page],
-  };
+    return {
+      sourceName,
+      pageCount: 1,
+      pages: [page],
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Image processing failed: ${detail}`);
+  }
 }
 
 async function processPdfDocument(
   bytes: Uint8Array,
   sourceName: string,
 ): Promise<ProcessedDocument> {
-  await ensurePdfjs();
+  try {
+    await ensurePdfjs();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown error";
+    console.error("[document] PDF.js module init failed:", detail);
+    throw new Error(`PDF engine failed to load: ${detail}`);
+  }
 
-  const pdf = await getDocumentProxy(bytes);
+  let pdf;
+  try {
+    pdf = await getDocumentProxy(bytes);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown error";
+    console.error("[document] PDF parse failed:", detail);
+    throw new Error(`PDF parsing failed: ${detail}`);
+  }
+
   const pageCount = pdf.numPages;
   const pages: DocumentPage[] = [];
 
   try {
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-      const dataUrl = (await renderPageAsImage(pdf, pageNumber, {
-        canvasImport: () => import("@napi-rs/canvas"),
-        scale: PDF_RENDER_SCALE,
-        toDataURL: true,
-      })) as string;
+      let dataUrl: string;
+      try {
+        dataUrl = (await renderPageAsImage(pdf, pageNumber, {
+          canvasImport: () => import("@napi-rs/canvas"),
+          scale: PDF_RENDER_SCALE,
+          toDataURL: true,
+        })) as string;
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "Unknown error";
+        console.error(
+          `[document] PDF render failed on page ${pageNumber}:`,
+          detail,
+        );
+        if (/canvas|napi|native/i.test(detail)) {
+          throw new Error(`Canvas/native module failed: ${detail}`);
+        }
+        throw new Error(`PDF rendering failed on page ${pageNumber}: ${detail}`);
+      }
 
       const match = /^data:(image\/png|image\/jpeg);base64,(.+)$/.exec(dataUrl);
       if (!match) {
-        throw new Error(`Failed to render PDF page ${pageNumber}.`);
+        throw new Error(`PDF rendering failed on page ${pageNumber}: invalid image output.`);
       }
 
       const mimeType = match[1] as "image/png" | "image/jpeg";
-      const pageBytes = Uint8Array.from(Buffer.from(match[2], "base64"));
+      const imageBase64 = match[2];
+      const pageBytes = Uint8Array.from(Buffer.from(imageBase64, "base64"));
       const pdfPage = await pdf.getPage(pageNumber);
       const viewport = pdfPage.getViewport({ scale: PDF_RENDER_SCALE });
 
@@ -128,6 +165,8 @@ async function processPdfDocument(
         bytes: pageBytes,
         width: Math.round(viewport.width),
         height: Math.round(viewport.height),
+        // Keep the render-time base64 so Gemini/API do not re-encode.
+        imageBase64,
       });
     }
   } finally {
@@ -169,11 +208,29 @@ export async function processDocument(
     if (error instanceof Error && error.message.startsWith("Unsupported")) {
       throw error;
     }
+
     const detail = error instanceof Error ? error.message : "Unknown error";
+    console.error("[document] processDocument failed:", {
+      sourceName,
+      mimeType,
+      byteLength: bytes.byteLength,
+      detail,
+    });
+
+    // Preserve already-classified messages; wrap only generic failures.
+    if (
+      /PDF parsing failed|PDF rendering failed|PDF engine failed|Canvas\/native|Image processing failed/i.test(
+        detail,
+      )
+    ) {
+      throw error instanceof Error ? error : new Error(detail);
+    }
+
     throw new Error(`Document processing failed: ${detail}`);
   }
 }
 
 export function pageToBase64(page: DocumentPage): string {
+  if (page.imageBase64) return page.imageBase64;
   return Buffer.from(page.bytes).toString("base64");
 }

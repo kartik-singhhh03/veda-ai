@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  clampPage,
   filterRegionsForPage,
   getFirstRegionPage,
+  getRegionPages,
+  regionToPercentStyle,
   regionToPixelRect,
 } from "./regions";
 import type { AnswerRegion } from "../../types/assessment";
@@ -84,6 +87,62 @@ describe("getFirstRegionPage", () => {
       getFirstRegionPage([
         { page: 0, x: 0.1, y: 0.1, width: 0.2, height: 0.1 },
       ]),
+      null,
+    );
+  });
+});
+
+describe("getRegionPages", () => {
+  it("returns sorted unique pages for multi-page answers", () => {
+    assert.deepEqual(
+      getRegionPages([
+        { page: 3, x: 0.1, y: 0.1, width: 0.2, height: 0.1 },
+        { page: 1, x: 0.1, y: 0.1, width: 0.2, height: 0.1 },
+        { page: 3, x: 0.2, y: 0.2, width: 0.2, height: 0.1 },
+      ]),
+      [1, 3],
+    );
+  });
+});
+
+describe("clampPage", () => {
+  it("keeps pages within 1..totalPages", () => {
+    assert.equal(clampPage(0, 4), 1);
+    assert.equal(clampPage(5, 4), 4);
+    assert.equal(clampPage(2.7, 4), 2);
+    assert.equal(clampPage(Number.NaN, 4), 1);
+    assert.equal(clampPage(1, 0), 1);
+  });
+});
+
+describe("regionToPercentStyle", () => {
+  it("converts normalized regions to percentage CSS for zoom-safe overlays", () => {
+    assert.deepEqual(
+      regionToPercentStyle({
+        page: 1,
+        x: 0.1,
+        y: 0.2,
+        width: 0.5,
+        height: 0.25,
+      }),
+      {
+        left: "10%",
+        top: "20%",
+        width: "50%",
+        height: "25%",
+      },
+    );
+  });
+
+  it("returns null for invalid regions", () => {
+    assert.equal(
+      regionToPercentStyle({
+        page: 0,
+        x: 0.1,
+        y: 0.1,
+        width: 0.2,
+        height: 0.2,
+      }),
       null,
     );
   });

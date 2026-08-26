@@ -23,6 +23,9 @@ export type AnswerCandidate = {
   confidence: number;
 };
 
+/** How an answered mapping was produced. */
+export type MappingMethod = "exact" | "semantic";
+
 /** Mapped application answer after Phase 3. */
 export type Answer = {
   id: string;
@@ -31,6 +34,8 @@ export type Answer = {
   regions: AnswerRegion[];
   confidence: number;
   status: "answered" | "unanswered" | "unmatched";
+  /** Present on answered mappings; omitted for unmatched. */
+  mappingMethod?: MappingMethod;
 };
 
 export type Assessment = {
@@ -47,6 +52,11 @@ export type DocumentPage = {
   bytes: Uint8Array;
   width: number;
   height: number;
+  /**
+   * Optional cached base64 (no data: prefix).
+   * When present, avoids re-encoding bytes for Gemini / API responses.
+   */
+  imageBase64?: string;
 };
 
 /** Client-safe page payload for the answer-sheet viewer (no Uint8Array). */

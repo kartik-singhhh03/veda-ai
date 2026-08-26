@@ -23,7 +23,6 @@ export type MapAnswersResponse = {
   answers: Answer[];
   unansweredQuestions: Question[];
   unmatchedCandidates: AnswerCandidate[];
-  debugAnswers?: unknown;
 };
 
 export type GradeAnswerResponse = {
@@ -37,14 +36,19 @@ function humanizeApiError(raw: string, fallback: string): string {
   if (message.includes("GEMINI_API_KEY")) {
     return "Gemini API key is missing on the server. Add GEMINI_API_KEY and try again.";
   }
-  if (/unsupported file type/i.test(message)) {
-    return "Unsupported file type. Please upload a PDF, PNG, JPG, or JPEG.";
+  if (/too large|deployment limit|response limit/i.test(message)) {
+    return message.includes("page images")
+      ? message
+      : "File is too large for the current deployment limit (max 4MB).";
   }
-  if (/too large/i.test(message)) {
-    return "File is too large. Maximum size is 10MB.";
+  if (/no longer available|NOT_FOUND|model.*not found/i.test(message)) {
+    return "The configured Gemini model is unavailable. Update GEMINI_MODEL in lib/ai/config.ts and restart the server.";
   }
-  if (/question extraction/i.test(message) || /no questions/i.test(message)) {
+  if (/question extraction failed validation|no questions were extracted/i.test(message)) {
     return "Question extraction failed. Please try uploading the question paper again.";
+  }
+  if (/Gemini question extraction failed/i.test(message)) {
+    return "Question extraction failed. Check your Gemini API key/model, then try again.";
   }
   if (/answer extraction/i.test(message)) {
     return "Answer extraction failed. Please try uploading the answer sheet again.";
@@ -52,7 +56,19 @@ function humanizeApiError(raw: string, fallback: string): string {
   if (/mapping/i.test(message)) {
     return "Answer mapping failed. Extraction results could not be linked. Please try again.";
   }
-  if (/document processing/i.test(message) || /pdf/i.test(message)) {
+  if (/PDF parsing failed/i.test(message)) {
+    return "Could not read this PDF. Please try another file or export it again.";
+  }
+  if (/PDF rendering failed|PDF engine failed/i.test(message)) {
+    return "Could not render this PDF for processing. Please try another file.";
+  }
+  if (/Canvas\/native module failed/i.test(message)) {
+    return "Server PDF rendering is unavailable. Please try again or use image uploads.";
+  }
+  if (/Image processing failed/i.test(message)) {
+    return "Could not process this image. Please try another PNG/JPG file.";
+  }
+  if (/document processing/i.test(message)) {
     return "Document processing failed. Please check the file and try again.";
   }
   if (/grading/i.test(message)) {

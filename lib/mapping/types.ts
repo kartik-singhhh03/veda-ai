@@ -1,8 +1,13 @@
-import type { Answer, AnswerCandidate, Question } from "../../types/assessment";
+import type {
+  Answer,
+  AnswerCandidate,
+  MappingMethod,
+  Question,
+} from "../../types/assessment";
 
-export type MappingMethod = "exact" | "semantic";
+export type { MappingMethod };
 
-/** Internal debug info — not required by the public Answer type. */
+/** Internal debug info — extends Answer with reference traces. */
 export type MappedAnswerDebug = Answer & {
   questionReference: string | null;
   normalizedReference: string | null;

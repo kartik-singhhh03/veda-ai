@@ -32,7 +32,7 @@ export function UploadCard({
   }
 
   return (
-    <div className="flex min-h-[140px] flex-1 items-center justify-center rounded-2xl border border-dashed border-[#d8d8d8] bg-card px-4 py-5 shadow-sm sm:min-h-[160px]">
+    <div className="flex min-h-[148px] flex-1 items-center justify-center rounded-[22px] border border-dashed border-[#d6d6d6] bg-card px-4 py-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:min-h-[168px]">
       <input
         id={inputId}
         type="file"
@@ -47,10 +47,10 @@ export function UploadCard({
       ) : (
         <label
           htmlFor={inputId}
-          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl px-2 py-4 text-center outline-none transition-colors hover:bg-surface/60 focus-within:ring-2 focus-within:ring-accent/40"
+          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2.5 rounded-xl px-2 py-4 text-center outline-none transition-colors hover:bg-surface/60 focus-within:ring-2 focus-within:ring-accent/40"
         >
           <span
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-muted"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-muted"
             aria-hidden
           >
             <Upload className="h-5 w-5" strokeWidth={1.75} />
