@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f3f3f3;
+  --foreground: #1c1c1c;
+  --card: #ffffff;
+  --muted: #6b6b6b;
+  --border: #e5e5e5;
+  --accent: #ff6a3d;
+  --accent-soft: #ffe8df;
+  --accent-glow: #ff7a4d;
+  --success: #22c55e;
+  --surface: #f7f7f7;
+  --button: #3a3a3a;
+  --button-disabled: #cfcfcf;
+  --sidebar: #ffffff;
+  --danger: #ef4444;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-glow: var(--accent-glow);
+  --color-success: var(--success);
+  --color-surface: var(--surface);
+  --color-button: var(--button);
+  --color-button-disabled: var(--button-disabled);
+  --color-sidebar: var(--sidebar);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-plus-jakarta);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-plus-jakarta), ui-sans-serif, sans-serif;
+}
+
+@keyframes sparkle-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-sparkle {
+  animation: sparkle-pulse 1.6s ease-in-out infinite;
+}
+
+.animate-sparkle-delayed {
+  animation: sparkle-pulse 1.6s ease-in-out 0.25s infinite;
+}
+
+.animate-sparkle-delayed-more {
+  animation: sparkle-pulse 1.6s ease-in-out 0.5s infinite;
+}
