@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx --yes tsx --test lib/mapping/normalizeQuestionId.test.ts lib/mapping/semanticGuards.test.ts lib/viewer/regions.test.ts lib/ai/validateGrade.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.19.0",

@@ -1,4 +1,4 @@
-import type { AnswerRegion } from "@/types/assessment";
+import type { AnswerRegion } from "../../types/assessment";
 
 /**
  * Gemini object-detection style box: [ymin, xmin, ymax, xmax]
