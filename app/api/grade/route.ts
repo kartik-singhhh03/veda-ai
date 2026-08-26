@@ -3,6 +3,7 @@ import { ApiError, jsonError } from "@/lib/api/upload";
 import type { Answer, Question } from "@/types/assessment";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 function isQuestion(value: unknown): value is Question {
   if (!value || typeof value !== "object") return false;

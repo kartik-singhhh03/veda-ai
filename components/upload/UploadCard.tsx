@@ -21,6 +21,7 @@ export function UploadCard({
   onRemove,
 }: UploadCardProps) {
   const inputId = useId();
+  const description = `${label} ${accentLabel}`;
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const nextFile = event.target.files?.[0];
@@ -31,13 +32,14 @@ export function UploadCard({
   }
 
   return (
-    <div className="flex min-h-[140px] flex-1 items-center justify-center rounded-2xl border border-dashed border-[#d8d8d8] bg-card px-4 py-5 sm:min-h-[160px]">
+    <div className="flex min-h-[140px] flex-1 items-center justify-center rounded-2xl border border-dashed border-[#d8d8d8] bg-card px-4 py-5 shadow-sm sm:min-h-[160px]">
       <input
         id={inputId}
         type="file"
         className="sr-only"
         accept={getAcceptAttribute()}
         onChange={handleChange}
+        aria-label={description}
       />
 
       {file ? (
@@ -45,7 +47,7 @@ export function UploadCard({
       ) : (
         <label
           htmlFor={inputId}
-          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl px-2 py-4 text-center outline-none focus-within:ring-2 focus-within:ring-accent/40"
+          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl px-2 py-4 text-center outline-none transition-colors hover:bg-surface/60 focus-within:ring-2 focus-within:ring-accent/40"
         >
           <span
             className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-muted"

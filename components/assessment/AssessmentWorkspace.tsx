@@ -26,6 +26,17 @@ type AssessmentWorkspaceProps = {
 
 type MobileTab = "questions" | "answerSheet";
 
+function findAnswerPage(
+  answersByQuestionId: Map<string, Answer>,
+  unansweredIds: Set<string>,
+  questionId: string | null,
+): number | null {
+  if (!questionId || unansweredIds.has(questionId)) return null;
+  const answer = answersByQuestionId.get(questionId);
+  if (!answer) return null;
+  return getFirstRegionPage(answer.regions);
+}
+
 export function AssessmentWorkspace({
   questions,
   answers,
@@ -34,17 +45,6 @@ export function AssessmentWorkspace({
   answerPages,
   onReset,
 }: AssessmentWorkspaceProps) {
-  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
-    questions[0]?.id ?? null,
-  );
-  const [currentPage, setCurrentPage] = useState(1);
-  const [mobileTab, setMobileTab] = useState<MobileTab>("questions");
-  const [grades, setGrades] = useState<Record<string, GradeResult>>({});
-  const [gradingQuestionId, setGradingQuestionId] = useState<string | null>(
-    null,
-  );
-  const [gradingError, setGradingError] = useState<string | null>(null);
-
   const answersByQuestionId = useMemo(() => {
     const map = new Map<string, Answer>();
     for (const answer of answers) {
@@ -59,6 +59,23 @@ export function AssessmentWorkspace({
     () => new Set(unansweredQuestions.map((question) => question.id)),
     [unansweredQuestions],
   );
+
+  const initialQuestionId = questions[0]?.id ?? null;
+
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(
+    initialQuestionId,
+  );
+  const [currentPage, setCurrentPage] = useState(() => {
+    return (
+      findAnswerPage(answersByQuestionId, unansweredIds, initialQuestionId) ?? 1
+    );
+  });
+  const [mobileTab, setMobileTab] = useState<MobileTab>("questions");
+  const [grades, setGrades] = useState<Record<string, GradeResult>>({});
+  const [gradingQuestionId, setGradingQuestionId] = useState<string | null>(
+    null,
+  );
+  const [gradingError, setGradingError] = useState<string | null>(null);
 
   const gradesByQuestionId = useMemo(() => {
     const map = new Map<string, GradeResult>();
@@ -76,17 +93,6 @@ export function AssessmentWorkspace({
   const isUnanswered = selectedQuestionId
     ? unansweredIds.has(selectedQuestionId)
     : false;
-
-  // Jump to the first region page when the selected question changes.
-  useEffect(() => {
-    if (!selectedQuestionId) return;
-    if (isUnanswered || !selectedAnswer) return;
-
-    const firstPage = getFirstRegionPage(selectedAnswer.regions);
-    if (firstPage != null) {
-      setCurrentPage(firstPage);
-    }
-  }, [selectedQuestionId, selectedAnswer, isUnanswered]);
 
   // On-demand grading with cache — do not re-request for the same question.
   useEffect(() => {
@@ -134,6 +140,22 @@ export function AssessmentWorkspace({
   function handleSelectQuestion(questionId: string) {
     setSelectedQuestionId(questionId);
     setGradingError(null);
+
+    const page = findAnswerPage(
+      answersByQuestionId,
+      unansweredIds,
+      questionId,
+    );
+    if (page != null) {
+      setCurrentPage(page);
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 1023px)").matches
+    ) {
+      setMobileTab("answerSheet");
+    }
   }
 
   return (
@@ -151,7 +173,7 @@ export function AssessmentWorkspace({
         <button
           type="button"
           onClick={onReset}
-          className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-surface"
+          className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           Upload again
         </button>
@@ -159,11 +181,17 @@ export function AssessmentWorkspace({
 
       <UnmatchedAnswersPanel unmatchedCandidates={unmatchedCandidates} />
 
-      <div className="flex rounded-full bg-surface p-1 lg:hidden">
+      <div
+        className="flex rounded-full bg-surface p-1 lg:hidden"
+        role="tablist"
+        aria-label="Assessment views"
+      >
         <button
           type="button"
+          role="tab"
+          aria-selected={mobileTab === "questions"}
           onClick={() => setMobileTab("questions")}
-          className={`flex-1 rounded-full px-3 py-2 text-sm font-medium ${
+          className={`flex-1 rounded-full px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
             mobileTab === "questions" ? "bg-button text-white" : "text-muted"
           }`}
         >
@@ -171,8 +199,10 @@ export function AssessmentWorkspace({
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={mobileTab === "answerSheet"}
           onClick={() => setMobileTab("answerSheet")}
-          className={`flex-1 rounded-full px-3 py-2 text-sm font-medium ${
+          className={`flex-1 rounded-full px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
             mobileTab === "answerSheet" ? "bg-button text-white" : "text-muted"
           }`}
         >
@@ -200,7 +230,6 @@ export function AssessmentWorkspace({
           />
           <QuestionList
             questions={questions}
-            answersByQuestionId={answersByQuestionId}
             unansweredIds={unansweredIds}
             gradesByQuestionId={gradesByQuestionId}
             selectedQuestionId={selectedQuestionId}

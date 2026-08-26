@@ -1,11 +1,10 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import type { Answer, GradeResult, Question } from "@/types/assessment";
+import type { GradeResult, Question } from "@/types/assessment";
 
 type QuestionCardProps = {
   question: Question;
-  answer: Answer | undefined;
   isUnanswered: boolean;
   selected: boolean;
   grade: GradeResult | null;
@@ -14,13 +13,11 @@ type QuestionCardProps = {
 
 export function QuestionCard({
   question,
-  answer,
   isUnanswered,
   selected,
   grade,
   onSelect,
 }: QuestionCardProps) {
-  const statusLabel = isUnanswered ? "Unanswered" : "Answered";
   const hasScore =
     grade &&
     grade.score !== null &&
@@ -31,12 +28,13 @@ export function QuestionCard({
     <button
       type="button"
       onClick={() => onSelect(question.id)}
-      className={`w-full rounded-2xl border px-4 py-3 text-left transition-colors ${
+      className={`w-full rounded-2xl border px-4 py-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
         selected
-          ? "border-accent bg-accent-soft/40 shadow-sm"
+          ? "border-accent bg-accent-soft/50"
           : "border-border bg-card hover:bg-surface"
       }`}
       aria-pressed={selected}
+      aria-label={`Question ${question.number}${isUnanswered ? ", unanswered" : ""}`}
     >
       <div className="flex items-start gap-3">
         <span
@@ -62,37 +60,22 @@ export function QuestionCard({
                 >
                   {grade.score} / {grade.maxScore}
                 </span>
+              ) : isUnanswered ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+                  <AlertTriangle className="h-3 w-3" aria-hidden />
+                  Unanswered
+                </span>
               ) : question.maxMarks !== undefined ? (
                 <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-muted">
                   Not graded
                 </span>
               ) : (
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                    isUnanswered
-                      ? "bg-amber-50 text-amber-700"
-                      : "bg-emerald-50 text-emerald-700"
-                  }`}
-                >
-                  {isUnanswered ? (
-                    <span className="inline-flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      {statusLabel}
-                    </span>
-                  ) : (
-                    statusLabel
-                  )}
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                  Answered
                 </span>
               )}
             </div>
           </div>
-
-          {isUnanswered && question.maxMarks !== undefined ? (
-            <p className="mt-2 inline-flex items-center gap-1 text-xs text-amber-700">
-              <AlertTriangle className="h-3 w-3" />
-              Unanswered
-            </p>
-          ) : null}
         </div>
       </div>
     </button>

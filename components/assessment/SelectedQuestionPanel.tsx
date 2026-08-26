@@ -28,16 +28,18 @@ export function SelectedQuestionPanel({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border bg-surface p-3">
+    <div className="space-y-3 rounded-2xl border border-border bg-white p-4 shadow-sm">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
           Question {question.number}
         </p>
-        <p className="mt-1 text-sm text-foreground">{question.text}</p>
+        <p className="mt-1 text-sm leading-relaxed text-foreground">
+          {question.text}
+        </p>
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
           Student answer
         </p>
         {isUnanswered ? (
@@ -45,32 +47,33 @@ export function SelectedQuestionPanel({
             This question was not answered.
           </p>
         ) : answer ? (
-          <>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-foreground/90">
-              {answer.text}
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              Mapping confidence {(answer.confidence * 100).toFixed(0)}%
-            </p>
-          </>
+          <p className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+            {answer.text}
+          </p>
         ) : (
           <p className="mt-1 text-sm text-muted">No mapped answer.</p>
         )}
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
           AI Feedback
         </p>
         {grading ? (
           <p className="mt-1 text-sm text-muted">Grading...</p>
         ) : gradingError ? (
-          <p className="mt-1 text-sm text-danger">{gradingError}</p>
+          <p
+            role="alert"
+            className="mt-1 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-danger"
+          >
+            Grading unavailable right now. You can still review the mapped
+            answer and highlight.
+          </p>
         ) : grade?.feedback ? (
-          <div className="mt-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground/90">
+          <div className="mt-1 rounded-xl border border-accent/30 bg-accent-soft/40 px-3 py-2.5 text-sm leading-relaxed text-foreground/90">
             {grade.feedback}
             {grade.score !== null && grade.maxScore !== null ? (
-              <p className="mt-2 text-xs font-medium text-muted">
+              <p className="mt-2 text-xs font-semibold text-foreground">
                 Score: {grade.score} / {grade.maxScore}
               </p>
             ) : null}

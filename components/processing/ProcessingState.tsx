@@ -35,7 +35,10 @@ export function ProcessingState({
             />
           </div>
 
-          <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          <h2
+            className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl"
+            aria-live="polite"
+          >
             {stageLabel}
           </h2>
           <p className="mt-2 text-sm text-muted">This may take a while</p>

@@ -4,6 +4,7 @@ import { jsonError, ApiError } from "@/lib/api/upload";
 import type { AnswerCandidate, Question } from "@/types/assessment";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 function isQuestion(value: unknown): value is Question {
   if (!value || typeof value !== "object") return false;

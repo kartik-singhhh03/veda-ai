@@ -1,11 +1,10 @@
 "use client";
 
 import { QuestionCard } from "@/components/assessment/QuestionCard";
-import type { Answer, GradeResult, Question } from "@/types/assessment";
+import type { GradeResult, Question } from "@/types/assessment";
 
 type QuestionListProps = {
   questions: Question[];
-  answersByQuestionId: Map<string, Answer>;
   unansweredIds: Set<string>;
   gradesByQuestionId: Map<string, GradeResult>;
   selectedQuestionId: string | null;
@@ -14,7 +13,6 @@ type QuestionListProps = {
 
 export function QuestionList({
   questions,
-  answersByQuestionId,
   unansweredIds,
   gradesByQuestionId,
   selectedQuestionId,
@@ -36,7 +34,6 @@ export function QuestionList({
           <li key={question.id}>
             <QuestionCard
               question={question}
-              answer={answersByQuestionId.get(question.id)}
               isUnanswered={unansweredIds.has(question.id)}
               selected={selectedQuestionId === question.id}
               grade={gradesByQuestionId.get(question.id) ?? null}

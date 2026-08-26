@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import {
   filterRegionsForPage,
@@ -28,19 +28,11 @@ export function AnswerSheetViewer({
   selectedQuestionLabel,
 }: AnswerSheetViewerProps) {
   const [zoom, setZoom] = useState(1);
-  const [imageError, setImageError] = useState(false);
-  const [naturalSize, setNaturalSize] = useState<{
-    width: number;
-    height: number;
-  } | null>(null);
+  const [errorPage, setErrorPage] = useState<number | null>(null);
 
   const totalPages = pages.length;
   const page = pages.find((item) => item.pageNumber === currentPage) ?? null;
-
-  useEffect(() => {
-    setImageError(false);
-    setNaturalSize(null);
-  }, [currentPage, page?.imageBase64]);
+  const imageError = errorPage === currentPage;
 
   const imageSrc = useMemo(() => {
     if (!page) return null;
@@ -52,8 +44,10 @@ export function AnswerSheetViewer({
     return filterRegionsForPage(selectedAnswer.regions, currentPage);
   }, [selectedAnswer, isUnanswered, currentPage]);
 
-  const displayWidth = (naturalSize?.width ?? page?.width ?? 0) * zoom;
-  const displayHeight = (naturalSize?.height ?? page?.height ?? 0) * zoom;
+  const baseWidth = page?.width ?? 0;
+  const baseHeight = page?.height ?? 0;
+  const displayWidth = baseWidth * zoom;
+  const displayHeight = baseHeight * zoom;
 
   function zoomOut() {
     const index = ZOOM_STEPS.indexOf(zoom as (typeof ZOOM_STEPS)[number]);
@@ -139,9 +133,23 @@ export function AnswerSheetViewer({
       </div>
 
       {statusMessage ? (
-        <p className="mb-2 rounded-xl bg-surface px-3 py-2 text-xs text-muted">
+        <p
+          role="status"
+          className="mb-2 rounded-xl border border-border bg-surface px-3 py-2 text-xs text-muted"
+        >
+          {selectedQuestionLabel ? (
+            <span className="font-medium text-foreground">
+              Q {selectedQuestionLabel}:{" "}
+            </span>
+          ) : null}
           {statusMessage}
-          {selectedQuestionLabel ? ` (Q ${selectedQuestionLabel})` : ""}
+        </p>
+      ) : selectedQuestionLabel ? (
+        <p className="mb-2 text-xs text-muted">
+          Showing mapped answer for{" "}
+          <span className="font-medium text-foreground">
+            Q {selectedQuestionLabel}
+          </span>
         </p>
       ) : null}
 
@@ -164,22 +172,15 @@ export function AnswerSheetViewer({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              key={currentPage}
               src={imageSrc}
               alt={`Answer sheet page ${currentPage}`}
               className="block h-auto w-full"
               draggable={false}
-              onError={() => setImageError(true)}
-              onLoad={(event) => {
-                setNaturalSize({
-                  width: event.currentTarget.naturalWidth,
-                  height: event.currentTarget.naturalHeight,
-                });
-              }}
+              onError={() => setErrorPage(currentPage)}
             />
 
             {pageRegions.map((region, index) => {
-              const baseWidth = naturalSize?.width ?? page.width;
-              const baseHeight = naturalSize?.height ?? page.height;
               const rect = regionToPixelRect(region, baseWidth, baseHeight);
               if (!rect) return null;
 

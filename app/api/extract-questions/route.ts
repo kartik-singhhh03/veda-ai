@@ -3,6 +3,7 @@ import { jsonError, readUploadFile } from "@/lib/api/upload";
 import { processDocument } from "@/lib/documents/processDocument";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {

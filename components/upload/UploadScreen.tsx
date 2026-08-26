@@ -37,7 +37,7 @@ export function UploadScreen({
           </span>
         </h1>
 
-        <p className="mt-3 hidden text-sm text-muted sm:block">
+        <p className="mt-3 text-center text-sm text-muted">
           Upload both files to get started
         </p>
 
@@ -63,7 +63,7 @@ export function UploadScreen({
         {error ? (
           <p
             role="alert"
-            className="mt-4 text-center text-sm font-medium text-danger"
+            className="mt-4 max-w-md rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-center text-sm font-medium text-danger"
           >
             {error}
           </p>
@@ -73,18 +73,19 @@ export function UploadScreen({
           type="button"
           onClick={onStartMapping}
           disabled={!canStart}
-          className={`mt-8 inline-flex items-center justify-center gap-2 rounded-full px-10 py-3 text-sm font-semibold text-white transition-colors sm:mt-10 ${
+          aria-disabled={!canStart}
+          className={`mt-8 inline-flex items-center justify-center gap-2 rounded-full px-10 py-3 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 sm:mt-10 ${
             canStart
               ? "bg-button hover:bg-[#2b2b2b]"
               : "cursor-not-allowed bg-button-disabled"
           }`}
         >
           Start Mapping
-          <ArrowRight className="h-4 w-4" />
+          <ArrowRight className="h-4 w-4" aria-hidden />
         </button>
 
         <p className="mt-3 max-w-sm text-center text-xs leading-relaxed text-muted sm:mt-4">
-          Once both files are uploaded, you&apos;ll able to map answers with
+          Once both files are uploaded, you&apos;ll be able to map answers with
           questions
         </p>
       </div>
