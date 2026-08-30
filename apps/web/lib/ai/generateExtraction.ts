@@ -4,6 +4,7 @@ import { jsonMimeConfig } from "@/lib/ai/geminiConfig";
 import {
   EXTRACTION_MODEL_DEFAULT,
   GRADING_MODEL_DEFAULT,
+  isInvalidArgumentError,
   isModelNotFoundError,
   isQuotaError,
 } from "@/lib/ai/resolveModel";
@@ -70,7 +71,10 @@ export async function generateExtractionJson(
         );
       }
 
-      if (isModelNotFoundError(message)) {
+      if (
+        isModelNotFoundError(message) ||
+        isInvalidArgumentError(message)
+      ) {
         console.warn(`[${logPrefix}] Model ${model} unavailable: ${message}`);
         continue;
       }

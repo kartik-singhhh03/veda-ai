@@ -1,4 +1,5 @@
 import { bytesToBase64, isPdfBytes } from "@/lib/documents/bytesToBase64";
+import { looksLikeBlankRenders } from "@/lib/documents/pageRenderQuality";
 import { pageToBase64 } from "@/lib/documents/processDocument";
 import { generateExtractionJson } from "@/lib/ai/generateExtraction";
 import {
@@ -80,11 +81,6 @@ function buildImageParts(pages: DocumentPage[]): GeminiPart[] {
         data: pageToBase64(page),
       },
     });
-    if (page.bytes.byteLength < 5_000) {
-      console.warn(
-        `[extract-questions] Page ${page.pageNumber} render is very small (${page.bytes.byteLength} bytes) — may be blank on serverless.`,
-      );
-    }
   }
 
   return parts;
@@ -182,12 +178,21 @@ export async function extractQuestions(
   input: ExtractQuestionsInput,
 ): Promise<Question[]> {
   const { pages, pdfFallback } = input;
+  const hasPdf =
+    pdfFallback &&
+    pdfFallback.bytes.byteLength > 0 &&
+    isPdfBytes(pdfFallback.bytes);
+  const rendersBlank = looksLikeBlankRenders(pages);
 
-  if (pages.length === 0) {
+  if (pages.length === 0 && !hasPdf) {
     throw new Error("No pages available for question extraction.");
   }
 
-  const meta = pageMeta(pages);
+  const meta = {
+    ...pageMeta(pages),
+    rendersBlank,
+    pdfBytes: pdfFallback?.bytes.byteLength ?? 0,
+  };
   lastExtractDebug = "";
 
   if (pdfFallback && pdfFallback.bytes.byteLength > 0 && !isPdfBytes(pdfFallback.bytes)) {
@@ -197,31 +202,38 @@ export async function extractQuestions(
     });
   }
 
-  // Keep Gemini calls minimal (free tier) — local + Vercel both use same order.
   const attempts: ExtractAttempt[] = [];
 
-  if (pdfFallback && pdfFallback.bytes.byteLength > 0 && isPdfBytes(pdfFallback.bytes)) {
+  if (hasPdf) {
+    // Plain text first — JSON mime + inline PDF often returns empty on Gemini 3.x.
+    attempts.push({
+      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      label: "pdf-plain",
+      meta: { ...meta, input: "pdf" },
+      plain: true,
+    });
     attempts.push({
       parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
       label: "pdf",
-      meta: { ...meta, input: "pdf", pdfBytes: pdfFallback.bytes.byteLength },
+      meta: { ...meta, input: "pdf" },
     });
-  }
-
-  attempts.push({
-    parts: buildImageParts(pages),
-    label: "images",
-    meta: { ...meta, input: "images" },
-  });
-
-  if (pdfFallback && pdfFallback.bytes.byteLength > 0 && isPdfBytes(pdfFallback.bytes)) {
     attempts.push({
       parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
       label: "pdf-3.6",
-      meta: { ...meta, input: "pdf", pdfBytes: pdfFallback.bytes.byteLength },
+      meta: { ...meta, input: "pdf" },
       model: GRADING_MODEL_DEFAULT,
       plain: true,
     });
+  }
+
+  if (pages.length > 0 && !rendersBlank) {
+    attempts.push({
+      parts: buildImageParts(pages),
+      label: "images",
+      meta: { ...meta, input: "images" },
+    });
+  } else if (rendersBlank) {
+    console.warn("[extract-questions] skipping image attempts — PDF renders look blank", meta);
   }
 
   for (const attempt of attempts) {
@@ -231,7 +243,7 @@ export async function extractQuestions(
     }
   }
 
-  if (pages.length > 1) {
+  if (pages.length > 1 && !rendersBlank) {
     const perPage: Question[][] = [];
     for (const page of pages) {
       const chunk = await extractOnce({
@@ -247,8 +259,7 @@ export async function extractQuestions(
     if (merged.length > 0) return merged;
   }
 
-  const smallest = Math.min(...pages.map((p) => p.bytes.byteLength));
-  if (smallest < 5_000) {
+  if (rendersBlank && !hasPdf) {
     throw new Error(
       "No questions were extracted — PDF page renders look blank on the server. Try exporting the PDF again or upload PNG/JPG scans.",
     );

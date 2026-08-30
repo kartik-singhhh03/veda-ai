@@ -1,6 +1,8 @@
+import { jsonError, readUploadFile } from "@/lib/api/upload";
 import { extractQuestions } from "@/lib/ai/extractQuestions";
 import { geminiRuntimeSummary } from "@/lib/ai/config";
-import { jsonError, readUploadFile } from "@/lib/api/upload";
+import { isPdfBytes } from "@/lib/documents/bytesToBase64";
+import { getPdfPageCount } from "@/lib/documents/pdfPageCount";
 import { probePdfjsAssets } from "@/lib/documents/pdfjsServer";
 import { processDocument } from "@/lib/documents/processDocument";
 
@@ -22,6 +24,43 @@ export async function POST(request: Request) {
     const isPdfFile =
       file.mimeType === "application/pdf" ||
       file.fileName.toLowerCase().endsWith(".pdf");
+
+    // PDF question papers: send the original PDF bytes to Gemini (skip serverless renders).
+    if (isPdfFile && isPdfBytes(file.bytes)) {
+      const preprocessStarted = Date.now();
+      const pageCount = await getPdfPageCount(file.bytes);
+      const preprocessMs = Date.now() - preprocessStarted;
+
+      console.info("[extract-questions] pdf-only preprocess", {
+        sourceName: file.fileName,
+        pageCount,
+        pdfBytes: file.bytes.byteLength,
+        pdfAssets: probePdfjsAssets(),
+        preprocessMs,
+      });
+
+      const extractStarted = Date.now();
+      const questions = await extractQuestions({
+        pages: [],
+        pdfFallback: { bytes: file.bytes, pageCount },
+      });
+      const extractMs = Date.now() - extractStarted;
+
+      console.info("[extract-questions] done", {
+        sourceName: file.fileName,
+        pageCount,
+        questionCount: questions.length,
+        geminiMs: extractMs,
+        totalMs: Date.now() - started,
+        input: "pdf-only",
+      });
+
+      return Response.json({
+        questions,
+        pageCount,
+        sourceName: file.fileName,
+      });
+    }
 
     const preprocessStarted = Date.now();
     const document = await processDocument(

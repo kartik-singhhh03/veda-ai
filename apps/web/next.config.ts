@@ -8,6 +8,7 @@ const monorepoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..
 const pdfjsAssetTrace = [
   "./node_modules/pdfjs-dist/standard_fonts/**",
   "./node_modules/pdfjs-dist/cmaps/**",
+  "./node_modules/@napi-rs/canvas/**",
 ];
 
 const nextConfig: NextConfig = {

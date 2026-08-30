@@ -1,9 +1,12 @@
+import { bytesToBase64, isPdfBytes } from "@/lib/documents/bytesToBase64";
+import { looksLikeBlankRenders } from "@/lib/documents/pageRenderQuality";
 import { pageToBase64 } from "@/lib/documents/processDocument";
 import { generateExtractionJson } from "@/lib/ai/generateExtraction";
 import {
   normalizeAnswersPayload,
   parseGeminiJson,
 } from "@/lib/ai/parseGeminiJson";
+import { GRADING_MODEL_DEFAULT } from "@/lib/ai/resolveModel";
 import { validateAnswerCandidates } from "@/lib/ai/validateAnswers";
 import type { AnswerCandidate, DocumentPage } from "@vedaai/types";
 
@@ -27,14 +30,40 @@ Rules:
 
 Return JSON: { "answers": [ { "id", "questionReference", "text", "confidence", "regions": [ { "page", "box_2d" } ] } ] }`;
 
-export async function extractAnswers(
-  pages: DocumentPage[],
-): Promise<AnswerCandidate[]> {
-  if (pages.length === 0) {
-    throw new Error("No pages available for answer extraction.");
-  }
+export type ExtractAnswersInput = {
+  pages: DocumentPage[];
+  pdfFallback?: { bytes: Uint8Array; pageCount: number };
+};
 
-  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+type GeminiPart =
+  | { text: string }
+  | { inlineData: { mimeType: string; data: string } };
+
+type ExtractAttempt = {
+  parts: GeminiPart[];
+  label: string;
+  pageCount: number;
+  model?: string;
+  plain?: boolean;
+};
+
+function buildPdfParts(bytes: Uint8Array, pageCount: number): GeminiPart[] {
+  return [
+    { text: ANSWER_PROMPT },
+    {
+      text: `The answer sheet is attached as a PDF with ${pageCount} page(s). Read the PDF and extract every handwritten answer with bounding regions.`,
+    },
+    {
+      inlineData: {
+        mimeType: "application/pdf",
+        data: bytesToBase64(bytes),
+      },
+    },
+  ];
+}
+
+function buildImageParts(pages: DocumentPage[]): GeminiPart[] {
+  const parts: GeminiPart[] = [
     { text: ANSWER_PROMPT },
     {
       text: `The answer sheet has ${pages.length} page(s). Images follow in page order starting at page 1.`,
@@ -51,47 +80,116 @@ export async function extractAnswers(
     });
   }
 
+  return parts;
+}
+
+async function extractOnce(attempt: ExtractAttempt): Promise<AnswerCandidate[] | null> {
+  const { parts, label, pageCount, model, plain } = attempt;
+
   let responseText: string;
   try {
-    responseText = await generateExtractionJson(parts, "extract-answers");
+    responseText = await generateExtractionJson(parts, `extract-answers:${label}`, {
+      model,
+      plain,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown Gemini error";
-    console.error("Gemini answer extraction failed:", message);
-    throw new Error(
-      message.includes("quota")
-        ? message
-        : `Gemini answer extraction failed: ${message}`,
-    );
+    console.warn(`[extract-answers:${label}] Gemini call failed: ${message}`);
+    return null;
   }
 
   let parsed: unknown;
   try {
     parsed = normalizeAnswersPayload(parseGeminiJson(responseText));
   } catch {
-    try {
-      responseText = await generateExtractionJson(parts, "extract-answers", {
-        plain: true,
-      });
-      parsed = normalizeAnswersPayload(parseGeminiJson(responseText));
-    } catch (retryError) {
-      const message =
-        retryError instanceof Error ? retryError.message : "Invalid JSON";
-      throw new Error(`Gemini returned invalid JSON for answer extraction: ${message}`);
+    console.warn(`[extract-answers:${label}] invalid JSON`, {
+      preview: responseText.slice(0, 300),
+    });
+    return null;
+  }
+
+  const validation = validateAnswerCandidates(parsed, pageCount);
+  if (!validation.ok) {
+    console.warn(`[extract-answers:${label}] validation failed`, {
+      error: validation.error,
+      details: validation.details,
+      preview: responseText.slice(0, 400),
+    });
+    return null;
+  }
+
+  console.info(`[extract-answers:${label}] ok`, {
+    answerCount: validation.answers.length,
+    model: model ?? "default",
+    plain: Boolean(plain),
+  });
+  return validation.answers;
+}
+
+export async function extractAnswers(
+  input: ExtractAnswersInput | DocumentPage[],
+): Promise<AnswerCandidate[]> {
+  const { pages, pdfFallback } = Array.isArray(input)
+    ? { pages: input, pdfFallback: undefined }
+    : input;
+
+  const pageCount = pdfFallback?.pageCount ?? pages.length;
+  if (pageCount === 0) {
+    throw new Error("No pages available for answer extraction.");
+  }
+
+  const hasPdf =
+    pdfFallback &&
+    pdfFallback.bytes.byteLength > 0 &&
+    isPdfBytes(pdfFallback.bytes);
+  const rendersBlank = looksLikeBlankRenders(pages);
+
+  const attempts: ExtractAttempt[] = [];
+
+  if (hasPdf) {
+    attempts.push({
+      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      label: "pdf-plain",
+      pageCount: pdfFallback.pageCount,
+      plain: true,
+    });
+    attempts.push({
+      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      label: "pdf",
+      pageCount: pdfFallback.pageCount,
+    });
+    attempts.push({
+      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      label: "pdf-3.6",
+      pageCount: pdfFallback.pageCount,
+      model: GRADING_MODEL_DEFAULT,
+      plain: true,
+    });
+  }
+
+  if (pages.length > 0 && !rendersBlank) {
+    attempts.push({
+      parts: buildImageParts(pages),
+      label: "images",
+      pageCount: pages.length,
+    });
+  } else if (rendersBlank && pages.length > 0) {
+    console.warn("[extract-answers] skipping image attempts — PDF renders look blank");
+  }
+
+  for (const attempt of attempts) {
+    const result = await extractOnce(attempt);
+    if (result && result.length > 0) {
+      return result;
     }
   }
 
-  const validation = validateAnswerCandidates(parsed, pages.length);
-  if (!validation.ok) {
-    console.error("Answer validation failed:", validation.details, {
-      preview: responseText.slice(0, 400),
-    });
+  if (rendersBlank && !hasPdf) {
     throw new Error(
-      validation.details?.length
-        ? `${validation.error} ${validation.details.slice(0, 5).join("; ")}`
-        : validation.error,
+      "No answers were extracted — PDF page renders look blank on the server. Try uploading PNG/JPG scans.",
     );
   }
 
-  return validation.answers;
+  throw new Error("No answers were extracted from the answer sheet.");
 }

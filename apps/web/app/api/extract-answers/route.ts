@@ -20,8 +20,17 @@ export async function POST(request: Request) {
     );
     const preprocessMs = Date.now() - preprocessStarted;
 
+    const isPdfFile =
+      file.mimeType === "application/pdf" ||
+      file.fileName.toLowerCase().endsWith(".pdf");
+
     const extractStarted = Date.now();
-    const answers = await extractAnswers(document.pages);
+    const answers = await extractAnswers({
+      pages: document.pages,
+      pdfFallback: isPdfFile
+        ? { bytes: file.bytes, pageCount: document.pageCount }
+        : undefined,
+    });
     const extractMs = Date.now() - extractStarted;
 
     // Reuse the same rendered pages used for extraction so highlights align.
