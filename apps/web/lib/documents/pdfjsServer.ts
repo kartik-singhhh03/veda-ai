@@ -10,21 +10,48 @@ function assetBase(root: string, subdir: string): string {
   return dir.endsWith("/") || dir.endsWith("\\") ? dir : `${dir}/`;
 }
 
+function isPdfjsRoot(dir: string): boolean {
+  return existsSync(join(dir, "package.json"));
+}
+
 /**
  * Resolve pdfjs-dist root on disk.
  *
- * Next.js production bundles can turn `require.resolve("pdfjs-dist/...")`
- * into a numeric module id on Vercel, which then breaks `path.dirname`.
- * Resolve from the project root instead.
+ * In this npm-workspace monorepo, pdfjs-dist is hoisted to the repository root.
+ * Vercel Root Directory is `apps/web`, so process.cwd() may not contain pdfjs-dist
+ * directly under ./node_modules.
  */
 export function resolvePdfjsDistRoot(): string {
-  const fromNodeModules = join(process.cwd(), "node_modules", "pdfjs-dist");
-  if (existsSync(join(fromNodeModules, "package.json"))) {
-    return fromNodeModules;
+  const cwd = process.cwd();
+  const candidates = [
+    join(cwd, "node_modules", "pdfjs-dist"),
+    join(cwd, "..", "node_modules", "pdfjs-dist"),
+    join(cwd, "..", "..", "node_modules", "pdfjs-dist"),
+  ];
+
+  for (const candidate of candidates) {
+    if (isPdfjsRoot(candidate)) {
+      return candidate;
+    }
   }
 
-  const projectRequire = createRequire(join(process.cwd(), "package.json"));
-  return dirname(projectRequire.resolve("pdfjs-dist/package.json"));
+  for (const pkgJson of [
+    join(cwd, "package.json"),
+    join(cwd, "..", "package.json"),
+    join(cwd, "..", "..", "package.json"),
+  ]) {
+    if (!existsSync(pkgJson)) continue;
+    try {
+      const projectRequire = createRequire(pkgJson);
+      return dirname(projectRequire.resolve("pdfjs-dist/package.json"));
+    } catch {
+      // try next candidate
+    }
+  }
+
+  throw new Error(
+    `pdfjs-dist not found (cwd=${cwd}). Ensure npm install ran at the monorepo root.`,
+  );
 }
 
 /** Diagnostics for Vercel — standard fonts must exist or renders may be blank. */
@@ -32,13 +59,27 @@ export function probePdfjsAssets(): {
   root: string;
   standardFonts: boolean;
   cmaps: boolean;
+  cwd: string;
+  error?: string;
 } {
-  const root = resolvePdfjsDistRoot();
-  return {
-    root,
-    standardFonts: existsSync(join(root, "standard_fonts", "FoxitFixed.pfb")),
-    cmaps: existsSync(join(root, "cmaps", "78-H.bcmap")),
-  };
+  try {
+    const root = resolvePdfjsDistRoot();
+    return {
+      root,
+      cwd: process.cwd(),
+      standardFonts: existsSync(join(root, "standard_fonts", "FoxitFixed.pfb")),
+      cmaps: existsSync(join(root, "cmaps", "78-H.bcmap")),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return {
+      root: "",
+      cwd: process.cwd(),
+      standardFonts: false,
+      cmaps: false,
+      error: message,
+    };
+  }
 }
 
 /** Document options for Node/serverless PDF.js (fonts + CMaps from node_modules). */

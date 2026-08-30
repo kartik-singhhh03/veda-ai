@@ -132,23 +132,47 @@ Coverage includes ID normalization, exact mapping, unanswered/unmatched behavior
 
 The Next.js app lives in **`apps/web`**.
 
-### Option A — Root Directory `apps/web` (recommended)
+### Required Vercel setting
 
-1. Push the repository to GitHub.
-2. Import the project in Vercel.
-3. Set **Root Directory** to **`apps/web`**.
-4. Set **Install Command** to `npm install` (runs from monorepo root; enable *Include source files outside Root Directory* if prompted).
-5. Set **Build Command** to `cd ../.. && turbo run build --filter=@vedaai/web` or leave default `next build` after install from root.
-6. Set **`GEMINI_API_KEY`** (and optional model overrides) in Vercel env vars.
-7. Deploy.
+In **Project Settings → General → Root Directory**, set:
+
+```text
+apps/web
+```
+
+Leave **Output Directory** empty (Next.js default `.next`).
+
+Vercel will install dependencies from the monorepo root (npm workspaces) and build the Next.js app inside `apps/web`.
+
+### Environment variables
+
+Set in the Vercel project (Production + Preview):
+
+```bash
+GEMINI_API_KEY=your_key_here
+```
+
+Optional:
+
+```bash
+GEMINI_EXTRACTION_MODEL=gemini-3.5-flash-lite
+GEMINI_MODEL=gemini-3.6-flash
+```
+
+See `apps/web/.env.example`.
 
 `apps/web/vercel.json` configures API route `maxDuration` limits.
 
-### Option B — Deploy from repository root
+### Verify deployment
 
-If Root Directory is left at the repo root, the root **`vercel.json`** points Vercel at `apps/web/.next` and runs `turbo run build --filter=@vedaai/web`.
+Open `/api/health` on your production URL. Expect:
 
-Verify deployment: open `/api/health` — commit hash should match latest `main`.
+- `"commit"` matching latest `main`
+- `"pdfAssets": { "standardFonts": true, "cmaps": true }`
+- `"canvas": true`
+- `"ok": true`
+
+If `pdfAssets.standardFonts` is `false`, Root Directory is probably not `apps/web` or the monorepo install did not run.
 
 ### Runtime / duration
 
