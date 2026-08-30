@@ -178,14 +178,17 @@ export async function extractQuestions(
   input: ExtractQuestionsInput,
 ): Promise<Question[]> {
   const { pages, pdfFallback } = input;
-  const hasPdf =
+  const hasPdf = Boolean(
     pdfFallback &&
-    pdfFallback.bytes.byteLength > 0 &&
-    isPdfBytes(pdfFallback.bytes);
+      pdfFallback.pageCount > 0 &&
+      pdfFallback.bytes.byteLength > 0,
+  );
   const rendersBlank = looksLikeBlankRenders(pages);
 
   if (pages.length === 0 && !hasPdf) {
-    throw new Error("No pages available for question extraction.");
+    throw new Error(
+      "No pages available for question extraction. Upload a PDF with at least one page or a PNG/JPG scan.",
+    );
   }
 
   const meta = {
@@ -204,21 +207,22 @@ export async function extractQuestions(
 
   const attempts: ExtractAttempt[] = [];
 
-  if (hasPdf) {
+  if (hasPdf && pdfFallback) {
+    const { bytes, pageCount } = pdfFallback;
     // Plain text first — JSON mime + inline PDF often returns empty on Gemini 3.x.
     attempts.push({
-      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      parts: buildPdfParts(bytes, pageCount),
       label: "pdf-plain",
       meta: { ...meta, input: "pdf" },
       plain: true,
     });
     attempts.push({
-      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      parts: buildPdfParts(bytes, pageCount),
       label: "pdf",
       meta: { ...meta, input: "pdf" },
     });
     attempts.push({
-      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      parts: buildPdfParts(bytes, pageCount),
       label: "pdf-3.6",
       meta: { ...meta, input: "pdf" },
       model: GRADING_MODEL_DEFAULT,

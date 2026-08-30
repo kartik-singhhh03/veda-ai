@@ -1,4 +1,4 @@
-import { bytesToBase64, isPdfBytes } from "@/lib/documents/bytesToBase64";
+import { bytesToBase64 } from "@/lib/documents/bytesToBase64";
 import { looksLikeBlankRenders } from "@/lib/documents/pageRenderQuality";
 import { pageToBase64 } from "@/lib/documents/processDocument";
 import { generateExtractionJson } from "@/lib/ai/generateExtraction";
@@ -139,30 +139,32 @@ export async function extractAnswers(
     throw new Error("No pages available for answer extraction.");
   }
 
-  const hasPdf =
+  const hasPdf = Boolean(
     pdfFallback &&
-    pdfFallback.bytes.byteLength > 0 &&
-    isPdfBytes(pdfFallback.bytes);
+      pdfFallback.pageCount > 0 &&
+      pdfFallback.bytes.byteLength > 0,
+  );
   const rendersBlank = looksLikeBlankRenders(pages);
 
   const attempts: ExtractAttempt[] = [];
 
-  if (hasPdf) {
+  if (hasPdf && pdfFallback) {
+    const { bytes, pageCount } = pdfFallback;
     attempts.push({
-      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      parts: buildPdfParts(bytes, pageCount),
       label: "pdf-plain",
-      pageCount: pdfFallback.pageCount,
+      pageCount,
       plain: true,
     });
     attempts.push({
-      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      parts: buildPdfParts(bytes, pageCount),
       label: "pdf",
-      pageCount: pdfFallback.pageCount,
+      pageCount,
     });
     attempts.push({
-      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      parts: buildPdfParts(bytes, pageCount),
       label: "pdf-3.6",
-      pageCount: pdfFallback.pageCount,
+      pageCount,
       model: GRADING_MODEL_DEFAULT,
       plain: true,
     });

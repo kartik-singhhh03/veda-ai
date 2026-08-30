@@ -25,16 +25,36 @@ export async function POST(request: Request) {
       file.mimeType === "application/pdf" ||
       file.fileName.toLowerCase().endsWith(".pdf");
 
-    // PDF question papers: send the original PDF bytes to Gemini (skip serverless renders).
-    if (isPdfFile && isPdfBytes(file.bytes)) {
+    // PDF question papers: send original bytes to Gemini (skip serverless canvas renders).
+    if (isPdfFile) {
+      const pdfBytes = new Uint8Array(file.bytes);
       const preprocessStarted = Date.now();
-      const pageCount = await getPdfPageCount(file.bytes);
+      let pageCount: number;
+
+      try {
+        pageCount = await getPdfPageCount(pdfBytes);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "Unknown error";
+        console.error("[extract-questions] pdf page count failed", {
+          sourceName: file.fileName,
+          pdfBytes: pdfBytes.byteLength,
+          hasPdfHeader: isPdfBytes(pdfBytes),
+          detail,
+        });
+        throw error;
+      }
+
       const preprocessMs = Date.now() - preprocessStarted;
+
+      if (pageCount < 1) {
+        throw new Error("The uploaded PDF has no pages.");
+      }
 
       console.info("[extract-questions] pdf-only preprocess", {
         sourceName: file.fileName,
         pageCount,
-        pdfBytes: file.bytes.byteLength,
+        pdfBytes: pdfBytes.byteLength,
+        hasPdfHeader: isPdfBytes(pdfBytes),
         pdfAssets: probePdfjsAssets(),
         preprocessMs,
       });
@@ -42,7 +62,7 @@ export async function POST(request: Request) {
       const extractStarted = Date.now();
       const questions = await extractQuestions({
         pages: [],
-        pdfFallback: { bytes: file.bytes, pageCount },
+        pdfFallback: { bytes: pdfBytes, pageCount },
       });
       const extractMs = Date.now() - extractStarted;
 

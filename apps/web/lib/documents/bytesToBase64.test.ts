@@ -14,6 +14,10 @@ describe("bytesToBase64", () => {
 describe("isPdfBytes", () => {
   it("detects PDF magic header", () => {
     assert.equal(isPdfBytes(new Uint8Array([0x25, 0x50, 0x44, 0x46])), true);
+    assert.equal(
+      isPdfBytes(new Uint8Array([0x0a, 0x25, 0x50, 0x44, 0x46])),
+      true,
+    );
     assert.equal(isPdfBytes(new Uint8Array([0x00, 0x50, 0x44, 0x46])), false);
   });
 });
