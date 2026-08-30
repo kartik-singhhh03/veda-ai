@@ -2,6 +2,7 @@ import { bytesToBase64 } from "@/lib/documents/bytesToBase64";
 import { validatePageImage } from "@/lib/documents/imageSignature";
 import { looksLikeBlankRenders } from "@/lib/documents/pageRenderQuality";
 import { pageToBase64 } from "@/lib/documents/processDocument";
+import { GEMINI_EXTRACTION_MODEL } from "@/lib/ai/config";
 import { generateExtractionJson } from "@/lib/ai/generateExtraction";
 import {
   normalizeQuestionsPayload,
@@ -12,8 +13,8 @@ import { isQuotaError } from "@/lib/ai/resolveModel";
 import { validateQuestions } from "@/lib/ai/validateQuestions";
 import type { DocumentPage, Question } from "@vedaai/types";
 
-/** One multimodal model for question extraction — avoids lite-model empty vision results. */
-const QUESTION_EXTRACTION_MODEL = GRADING_MODEL_DEFAULT;
+/** Prefer configured extraction model; fall back to 3.6-flash inside generateExtractionJson. */
+const QUESTION_EXTRACTION_MODEL = GEMINI_EXTRACTION_MODEL;
 
 const QUESTION_PROMPT = `You are extracting printed exam questions from a question paper image.
 
@@ -48,6 +49,7 @@ type ExtractAttempt = {
   parts: GeminiPart[];
   label: string;
   input: "images" | "pdf";
+  model?: string;
 };
 
 function buildPdfParts(bytes: Uint8Array, pageCount: number): GeminiPart[] {
@@ -117,14 +119,14 @@ function pageMeta(pages: DocumentPage[]) {
 }
 
 async function extractOnce(attempt: ExtractAttempt): Promise<Question[] | null> {
-  const { parts, label, input } = attempt;
+  const { parts, label, input, model = QUESTION_EXTRACTION_MODEL } = attempt;
 
   try {
     const responseText = await generateExtractionJson(
       parts,
       `extract-questions:${label}`,
       {
-        model: QUESTION_EXTRACTION_MODEL,
+        model,
         plain: true,
         singleModel: true,
       },
@@ -156,7 +158,7 @@ async function extractOnce(attempt: ExtractAttempt): Promise<Question[] | null> 
 
     console.info(`[extract-questions:${label}] ok`, {
       input,
-      model: QUESTION_EXTRACTION_MODEL,
+      model,
       questionCount: validation.questions.length,
     });
     return validation.questions;
@@ -168,12 +170,8 @@ async function extractOnce(attempt: ExtractAttempt): Promise<Question[] | null> 
       throw new Error(message);
     }
 
-    console.error(`[extract-questions:${label}] failed`, { input, message });
-    throw new Error(
-      message.includes("quota")
-        ? message
-        : `Gemini question extraction failed: ${message}`,
-    );
+    console.error(`[extract-questions:${label}] failed`, { input, model, message });
+    return null;
   }
 }
 
@@ -212,13 +210,16 @@ export async function extractQuestions(
       "[extract-questions] blank renders detected — using PDF input for Gemini",
       meta,
     );
-    const pdfResult = await extractOnce({
-      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
-      label: "pdf",
-      input: "pdf",
-    });
-    if (pdfResult && pdfResult.length > 0) {
-      return pdfResult;
+    for (const model of [QUESTION_EXTRACTION_MODEL, GRADING_MODEL_DEFAULT]) {
+      const pdfResult = await extractOnce({
+        parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+        label: model === QUESTION_EXTRACTION_MODEL ? "pdf" : "pdf-3.6",
+        input: "pdf",
+        model,
+      });
+      if (pdfResult && pdfResult.length > 0) {
+        return pdfResult;
+      }
     }
   }
 

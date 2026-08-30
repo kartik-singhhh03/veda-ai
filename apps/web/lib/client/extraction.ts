@@ -55,9 +55,12 @@ function humanizeApiError(raw: string, fallback: string): string {
       return "Gemini API key is invalid on the server. Update GEMINI_API_KEY in Vercel, redeploy, then try again.";
     }
     if (/not found|NOT_FOUND|404|is not supported|no longer available/i.test(message)) {
-      return "Gemini model unavailable on the server. In Vercel, set GEMINI_EXTRACTION_MODEL=gemini-3.5-flash-lite and GEMINI_MODEL=gemini-3.6-flash, then redeploy.";
+      return "Gemini model unavailable on the server. Set GEMINI_EXTRACTION_MODEL=gemini-3.5-flash-lite and GEMINI_MODEL=gemini-3.6-flash, then redeploy.";
     }
-    return "Question extraction failed. Check Gemini API key and model settings on Vercel, then redeploy.";
+    const detail = message.replace(/^Gemini question extraction failed:\s*/i, "");
+    return detail.length > 0 && detail.length <= 200
+      ? `Question extraction failed: ${detail}`
+      : "Question extraction failed. Check Gemini API key and model settings on Vercel, then redeploy.";
   }
   if (/no longer available|NOT_FOUND|model.*not found/i.test(message)) {
     return "The configured Gemini model is unavailable. Set GEMINI_EXTRACTION_MODEL=gemini-3.5-flash-lite in Vercel and redeploy.";
