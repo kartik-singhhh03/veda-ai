@@ -189,7 +189,7 @@ PDF rendering uses `@napi-rs/canvas` (native, Node-compatible; listed in `server
 
 Vercel Functions currently enforce ~**4.5 MB** request and response body limits.
 
-This assignment therefore:
+This assignment therefore :-
 
 - Accepts uploads up to **4 MB** (client + server, same constant in `lib/limits.ts`)
 - Returns answer-sheet page images as base64 only from `/api/extract-answers` (needed by the viewer)
