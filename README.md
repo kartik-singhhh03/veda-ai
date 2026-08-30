@@ -130,20 +130,25 @@ Coverage includes ID normalization, exact mapping, unanswered/unmatched behavior
 
 ## Deployment (Vercel)
 
-The Next.js application lives in **`apps/web`**.
+The Next.js app lives in **`apps/web`**.
+
+### Option A — Root Directory `apps/web` (recommended)
 
 1. Push the repository to GitHub.
 2. Import the project in Vercel.
-3. Set **Root Directory** to **`apps/web`** in Vercel project settings.
-4. Set environment variable **`GEMINI_API_KEY`** in the Vercel project (Production + Preview).
-5. Optional env overrides:
-   - `GEMINI_EXTRACTION_MODEL=gemini-3.5-flash-lite`
-   - `GEMINI_MODEL=gemini-3.6-flash`
-6. Deploy.
+3. Set **Root Directory** to **`apps/web`**.
+4. Set **Install Command** to `npm install` (runs from monorepo root; enable *Include source files outside Root Directory* if prompted).
+5. Set **Build Command** to `cd ../.. && turbo run build --filter=@vedaai/web` or leave default `next build` after install from root.
+6. Set **`GEMINI_API_KEY`** (and optional model overrides) in Vercel env vars.
+7. Deploy.
 
-`apps/web/vercel.json` configures API route `maxDuration` limits. No root-level Vercel config is required when Root Directory is set correctly.
+`apps/web/vercel.json` configures API route `maxDuration` limits.
 
-Verify deployment: open `/api/health` on your production URL.
+### Option B — Deploy from repository root
+
+If Root Directory is left at the repo root, the root **`vercel.json`** points Vercel at `apps/web/.next` and runs `turbo run build --filter=@vedaai/web`.
+
+Verify deployment: open `/api/health` — commit hash should match latest `main`.
 
 ### Runtime / duration
 

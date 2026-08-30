@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev": "turbo dev",
-    "build": "turbo build",
+    "build": "turbo run build --filter=@vedaai/web",
     "start": "npm --workspace @vedaai/web run start",
     "lint": "turbo lint",
     "test": "turbo test"
