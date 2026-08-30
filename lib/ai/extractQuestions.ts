@@ -1,6 +1,11 @@
 import { pageToBase64 } from "@/lib/documents/processDocument";
 import { generateExtractionJson } from "@/lib/ai/generateExtraction";
 import {
+  normalizeQuestionsPayload,
+  parseGeminiJson,
+} from "@/lib/ai/parseGeminiJson";
+import {
+  GRADING_MODEL_DEFAULT,
   isInvalidArgumentError,
   isModelNotFoundError,
   isQuotaError,
@@ -22,7 +27,9 @@ Rules:
 9. Set order to the actual printed sequence starting at 0 for the first question, then 1, 2, ...
 10. Set id to the same value as number when possible.
 
-Return JSON: { "questions": [ { "id", "number", "text", "order", "maxMarks"? } ] }`;
+You MUST return at least one question if any question text is visible.
+
+Return JSON only: { "questions": [ { "id", "number", "text", "order", "maxMarks"? } ] }`;
 
 export type ExtractQuestionsInput = {
   pages: DocumentPage[];
@@ -32,6 +39,14 @@ export type ExtractQuestionsInput = {
 type GeminiPart =
   | { text: string }
   | { inlineData: { mimeType: string; data: string } };
+
+type ExtractAttempt = {
+  parts: GeminiPart[];
+  label: string;
+  meta: Record<string, unknown>;
+  model?: string;
+  plain?: boolean;
+};
 
 function buildPdfParts(bytes: Uint8Array, pageCount: number): GeminiPart[] {
   return [
@@ -96,24 +111,23 @@ function pageMeta(pages: DocumentPage[]) {
   };
 }
 
-async function extractOnce(
-  parts: GeminiPart[],
-  label: string,
-  meta: Record<string, unknown>,
-): Promise<Question[] | null> {
+async function extractOnce(attempt: ExtractAttempt): Promise<Question[] | null> {
+  const { parts, label, meta, model, plain } = attempt;
+
   try {
     const responseText = await generateExtractionJson(
       parts,
       `extract-questions:${label}`,
+      { model, plain },
     );
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(responseText);
+      parsed = normalizeQuestionsPayload(parseGeminiJson(responseText));
     } catch {
       console.warn(`[extract-questions:${label}] invalid JSON`, {
         ...meta,
-        preview: responseText.slice(0, 200),
+        preview: responseText.slice(0, 300),
       });
       return null;
     }
@@ -124,6 +138,7 @@ async function extractOnce(
         ...meta,
         error: validation.error,
         details: validation.details,
+        preview: responseText.slice(0, 300),
       });
       return null;
     }
@@ -131,6 +146,8 @@ async function extractOnce(
     console.info(`[extract-questions:${label}] ok`, {
       ...meta,
       questionCount: validation.questions.length,
+      model: model ?? "default",
+      plain: Boolean(plain),
     });
     return validation.questions;
   } catch (error) {
@@ -166,33 +183,62 @@ export async function extractQuestions(
 
   const meta = pageMeta(pages);
 
-  // 1) Original PDF — most reliable when serverless renders are blank.
+  const attempts: ExtractAttempt[] = [];
+
   if (pdfFallback && pdfFallback.bytes.byteLength > 0) {
-    const fromPdf = await extractOnce(
-      buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
-      "pdf",
-      { ...meta, input: "pdf", pdfBytes: pdfFallback.bytes.byteLength },
-    );
-    if (fromPdf && fromPdf.length > 0) return fromPdf;
+    attempts.push({
+      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      label: "pdf",
+      meta: { ...meta, input: "pdf", pdfBytes: pdfFallback.bytes.byteLength },
+    });
+    attempts.push({
+      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      label: "pdf-plain",
+      meta: { ...meta, input: "pdf", pdfBytes: pdfFallback.bytes.byteLength },
+      plain: true,
+    });
   }
 
-  // 2) All page images together.
-  const fromImages = await extractOnce(
-    buildImageParts(pages),
-    "images",
-    { ...meta, input: "images" },
-  );
-  if (fromImages && fromImages.length > 0) return fromImages;
+  attempts.push({
+    parts: buildImageParts(pages),
+    label: "images",
+    meta: { ...meta, input: "images" },
+  });
 
-  // 3) One page per request — smaller payloads, works when batch fails.
+  attempts.push({
+    parts: buildImageParts(pages),
+    label: "images-plain",
+    meta: { ...meta, input: "images" },
+    plain: true,
+  });
+
+  if (pdfFallback && pdfFallback.bytes.byteLength > 0) {
+    attempts.push({
+      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
+      label: "pdf-3.6",
+      meta: { ...meta, input: "pdf", pdfBytes: pdfFallback.bytes.byteLength },
+      model: GRADING_MODEL_DEFAULT,
+      plain: true,
+    });
+  }
+
+  for (const attempt of attempts) {
+    const result = await extractOnce(attempt);
+    if (result && result.length > 0) {
+      return result;
+    }
+  }
+
+  // Per-page — only when multi-page and batch attempts failed.
   if (pages.length > 1) {
     const perPage: Question[][] = [];
     for (const page of pages) {
-      const chunk = await extractOnce(
-        buildImageParts([page]),
-        `page-${page.pageNumber}`,
-        { ...meta, input: "images", singlePage: page.pageNumber },
-      );
+      const chunk = await extractOnce({
+        parts: buildImageParts([page]),
+        label: `page-${page.pageNumber}`,
+        meta: { ...meta, input: "images", singlePage: page.pageNumber },
+        plain: true,
+      });
       if (chunk && chunk.length > 0) {
         perPage.push(chunk);
       }

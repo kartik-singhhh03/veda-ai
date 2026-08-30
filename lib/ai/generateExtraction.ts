@@ -3,6 +3,7 @@ import { GEMINI_EXTRACTION_MODEL } from "@/lib/ai/config";
 import { jsonMimeConfig } from "@/lib/ai/geminiConfig";
 import {
   EXTRACTION_MODEL_DEFAULT,
+  GRADING_MODEL_DEFAULT,
   isModelNotFoundError,
   isQuotaError,
 } from "@/lib/ai/resolveModel";
@@ -11,6 +12,12 @@ type GeminiPart =
   | { text: string }
   | { inlineData: { mimeType: string; data: string } };
 
+export type GenerateExtractionOptions = {
+  model?: string;
+  /** Skip responseMimeType — use when JSON mode returns empty on vision. */
+  plain?: boolean;
+};
+
 /**
  * One Gemini vision call for extraction — avoids burning free-tier quota on
  * multi-model / multi-config retry loops.
@@ -18,26 +25,36 @@ type GeminiPart =
 export async function generateExtractionJson(
   parts: GeminiPart[],
   logPrefix: string,
+  options?: GenerateExtractionOptions,
 ): Promise<string> {
   const client = getGeminiClient();
-  let model = GEMINI_EXTRACTION_MODEL;
+  let model = options?.model ?? GEMINI_EXTRACTION_MODEL;
+  const fallbacks = [
+    model,
+    ...(model !== EXTRACTION_MODEL_DEFAULT ? [EXTRACTION_MODEL_DEFAULT] : []),
+    ...(model !== GRADING_MODEL_DEFAULT ? [GRADING_MODEL_DEFAULT] : []),
+  ];
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  let lastError: Error | null = null;
+
+  for (const candidate of fallbacks) {
+    model = candidate;
     try {
       const response = await client.models.generateContent({
         model,
         contents: [{ role: "user", parts }],
-        config: jsonMimeConfig(),
+        config: options?.plain ? undefined : jsonMimeConfig(),
       });
 
       const text = response.text?.trim();
       if (!text) {
-        throw new Error("Gemini returned an empty response.");
+        lastError = new Error("Gemini returned an empty response.");
+        continue;
       }
 
       if (model !== GEMINI_EXTRACTION_MODEL) {
         console.warn(
-          `[${logPrefix}] Used fallback model ${model} (configured: ${GEMINI_EXTRACTION_MODEL})`,
+          `[${logPrefix}] Used model ${model} (configured: ${GEMINI_EXTRACTION_MODEL})`,
         );
       }
 
@@ -45,6 +62,7 @@ export async function generateExtractionJson(
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown Gemini error";
+      lastError = error instanceof Error ? error : new Error(message);
 
       if (isQuotaError(message)) {
         throw new Error(
@@ -52,9 +70,8 @@ export async function generateExtractionJson(
         );
       }
 
-      if (attempt === 0 && isModelNotFoundError(message)) {
-        console.warn(`[${logPrefix}] Model ${model} unavailable, retrying with ${EXTRACTION_MODEL_DEFAULT}`);
-        model = EXTRACTION_MODEL_DEFAULT;
+      if (isModelNotFoundError(message)) {
+        console.warn(`[${logPrefix}] Model ${model} unavailable: ${message}`);
         continue;
       }
 
@@ -62,5 +79,5 @@ export async function generateExtractionJson(
     }
   }
 
-  throw new Error("Gemini extraction failed.");
+  throw lastError ?? new Error("Gemini extraction failed.");
 }

@@ -56,7 +56,15 @@ export function validateQuestions(raw: unknown): QuestionValidationResult {
 
     const record = item as Record<string, unknown>;
     const number =
-      typeof record.number === "string" ? record.number.trim() : "";
+      typeof record.number === "string"
+        ? record.number.trim()
+        : typeof record.number === "number" && Number.isFinite(record.number)
+          ? String(record.number)
+          : typeof record.id === "string"
+            ? record.id.trim()
+            : typeof record.id === "number" && Number.isFinite(record.id)
+              ? String(record.id)
+              : "";
     const text = typeof record.text === "string" ? record.text.trim() : "";
     const order = parseOrder(record.order);
     const idRaw =
