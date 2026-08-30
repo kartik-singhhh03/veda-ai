@@ -3,6 +3,7 @@ import {
   ensurePdfjsServer,
   getPdfjsDocumentOptions,
   probeCanvasModule,
+  probePdfjsAssets,
 } from "@/lib/documents/pdfjsServer";
 import type { DocumentPage, ProcessedDocument } from "@/types/assessment";
 
@@ -131,6 +132,11 @@ async function processPdfDocument(
       "CANVAS_LOAD_ERROR",
       "Canvas/native module failed: @napi-rs/canvas could not be loaded.",
     );
+  }
+
+  const pdfAssets = probePdfjsAssets();
+  if (!pdfAssets.standardFonts || !pdfAssets.cmaps) {
+    console.warn("[document] PDFJS_ASSETS_MISSING:", pdfAssets);
   }
 
   let pdf;

@@ -59,19 +59,34 @@ Rules:
 
 Return JSON matching the schema.`;
 
-export async function extractQuestions(
-  pages: DocumentPage[],
-): Promise<Question[]> {
-  if (pages.length === 0) {
-    throw new Error("No pages available for question extraction.");
-  }
+export type ExtractQuestionsSource =
+  | { kind: "pdf"; bytes: Uint8Array; pageCount: number }
+  | { kind: "pages"; pages: DocumentPage[] };
 
-  const client = getGeminiClient();
+type GeminiPart =
+  | { text: string }
+  | { inlineData: { mimeType: string; data: string } };
 
-  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+function buildPdfParts(bytes: Uint8Array, pageCount: number): GeminiPart[] {
+  return [
     { text: QUESTION_PROMPT },
     {
-      text: `The document has ${pages.length} page(s). Images follow in page order starting at page 1.`,
+      text: `The question paper is attached as a PDF with ${pageCount} page(s). Read the PDF directly and extract every printed question.`,
+    },
+    {
+      inlineData: {
+        mimeType: "application/pdf",
+        data: Buffer.from(bytes).toString("base64"),
+      },
+    },
+  ];
+}
+
+function buildImageParts(pages: DocumentPage[]): GeminiPart[] {
+  const parts: GeminiPart[] = [
+    { text: QUESTION_PROMPT },
+    {
+      text: `The document has ${pages.length} page image(s). Images follow in page order starting at page 1.`,
     },
   ];
 
@@ -90,6 +105,15 @@ export async function extractQuestions(
     }
   }
 
+  return parts;
+}
+
+async function callGemini(
+  parts: GeminiPart[],
+  meta: Record<string, unknown>,
+): Promise<Question[]> {
+  const client = getGeminiClient();
+
   let responseText: string | undefined;
   try {
     const response = await client.models.generateContent({
@@ -100,7 +124,7 @@ export async function extractQuestions(
     responseText = response.text;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Gemini error";
-    console.error("Gemini question extraction failed:", message);
+    console.error("Gemini question extraction failed:", message, meta);
     throw new Error(`Gemini question extraction failed: ${message}`);
   }
 
@@ -118,10 +142,10 @@ export async function extractQuestions(
   const validation = validateQuestions(parsed);
   if (!validation.ok) {
     console.error("Question validation failed:", {
+      ...meta,
       error: validation.error,
       details: validation.details,
       model: GEMINI_EXTRACTION_MODEL,
-      pageCount: pages.length,
       responsePreview: responseText.slice(0, 400),
     });
     throw new Error(
@@ -132,4 +156,31 @@ export async function extractQuestions(
   }
 
   return validation.questions;
+}
+
+export async function extractQuestions(
+  source: ExtractQuestionsSource,
+): Promise<Question[]> {
+  if (source.kind === "pdf") {
+    return callGemini(buildPdfParts(source.bytes, source.pageCount), {
+      input: "pdf",
+      pageCount: source.pageCount,
+      byteLength: source.bytes.byteLength,
+    });
+  }
+
+  if (source.pages.length === 0) {
+    throw new Error("No pages available for question extraction.");
+  }
+
+  return callGemini(buildImageParts(source.pages), {
+    input: "images",
+    pageCount: source.pages.length,
+    pageSizes: source.pages.map((p) => ({
+      page: p.pageNumber,
+      bytes: p.bytes.byteLength,
+      width: p.width,
+      height: p.height,
+    })),
+  });
 }

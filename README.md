@@ -184,7 +184,7 @@ PDF rendering uses `@napi-rs/canvas` (native, Node-compatible; listed in `server
 
 **Node.js 22.x** is required (`package.json` `engines`) so PDF.js and native canvas bindings match local/Vercel behavior.
 
-**PDF.js on Vercel / Turbopack:** preload the worker on `globalThis.pdfjsWorker` (see `lib/documents/pdfjsServer.ts`). Resolve font/CMap dirs from `process.cwd()/node_modules/pdfjs-dist` with plain filesystem paths — bundled `require.resolve` can return numeric module ids on Vercel.
+**PDF.js on Vercel:** preload the worker on `globalThis.pdfjsWorker`, resolve font/CMap dirs from `process.cwd()/node_modules/pdfjs-dist`, and include `standard_fonts` + `cmaps` via `outputFileTracingIncludes` in `next.config.ts`. Question extraction sends the **original PDF** to Gemini (not rendered PNGs) so extraction works even if serverless renders are blank.
 
 ### Payload / file-size assumptions
 

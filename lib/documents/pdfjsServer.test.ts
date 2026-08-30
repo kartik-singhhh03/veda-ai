@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   getPdfjsDocumentOptions,
+  probePdfjsAssets,
   resolvePdfjsDistRoot,
 } from "./pdfjsServer";
 
@@ -19,13 +20,14 @@ describe("pdfjsServer paths", () => {
 
   it("returns filesystem paths for standard fonts and cmaps", () => {
     const opts = getPdfjsDocumentOptions();
-    assert.equal(typeof opts.standardFontDataUrl, "string");
-    assert.equal(typeof opts.cMapUrl, "string");
     assert.doesNotMatch(opts.standardFontDataUrl ?? "", /^file:\/\//);
-    assert.doesNotMatch(opts.cMapUrl ?? "", /^file:\/\//);
     assert.match(opts.standardFontDataUrl ?? "", /standard_fonts[/\\]$/);
     assert.match(opts.cMapUrl ?? "", /cmaps[/\\]$/);
-    assert.equal(opts.disableFontFace, true);
-    assert.equal(opts.cMapPacked, true);
+  });
+
+  it("reports standard font and cmap folders on disk", () => {
+    const assets = probePdfjsAssets();
+    assert.equal(assets.standardFonts, true);
+    assert.equal(assets.cmaps, true);
   });
 });

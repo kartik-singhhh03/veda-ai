@@ -27,6 +27,20 @@ export function resolvePdfjsDistRoot(): string {
   return dirname(projectRequire.resolve("pdfjs-dist/package.json"));
 }
 
+/** Diagnostics for Vercel — standard fonts must exist or renders may be blank. */
+export function probePdfjsAssets(): {
+  root: string;
+  standardFonts: boolean;
+  cmaps: boolean;
+} {
+  const root = resolvePdfjsDistRoot();
+  return {
+    root,
+    standardFonts: existsSync(join(root, "standard_fonts", "FoxitFixed.pfb")),
+    cmaps: existsSync(join(root, "cmaps", "78-H.bcmap")),
+  };
+}
+
 /** Document options for Node/serverless PDF.js (fonts + CMaps from node_modules). */
 export function getPdfjsDocumentOptions() {
   const root = resolvePdfjsDistRoot();
