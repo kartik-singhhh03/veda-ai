@@ -1,16 +1,14 @@
-/** Model for grading and semantic mapping. */
-export const GEMINI_MODEL = "gemini-3.6-flash";
+/** Default model — widely available on Google AI Studio (AIza and AQ auth keys). */
+export const GEMINI_MODEL =
+  process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 
-/**
- * Model for vision + structured extraction.
- * Flash-Lite is tuned for document extraction and JSON parsing (see Google Gemini docs).
- * Override with GEMINI_EXTRACTION_MODEL if needed.
- */
+/** Vision/PDF extraction uses the same default unless overridden. */
 export const GEMINI_EXTRACTION_MODEL =
-  process.env.GEMINI_EXTRACTION_MODEL?.trim() || "gemini-3.5-flash-lite";
+  process.env.GEMINI_EXTRACTION_MODEL?.trim() || GEMINI_MODEL;
 
 export function getGeminiApiKey(): string {
-  const key = process.env.GEMINI_API_KEY?.trim();
+  const key =
+    process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim();
   if (!key) {
     throw new Error(
       "GEMINI_API_KEY is missing. Add it to .env.local and restart the server.",

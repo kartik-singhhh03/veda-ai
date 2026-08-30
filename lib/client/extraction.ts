@@ -48,6 +48,12 @@ function humanizeApiError(raw: string, fallback: string): string {
     return "Question extraction failed. Please try uploading the question paper again.";
   }
   if (/Gemini question extraction failed/i.test(message)) {
+    if (/API key not valid|401|403|PERMISSION_DENIED|API_KEY_INVALID/i.test(message)) {
+      return "Gemini API key is invalid. Update GEMINI_API_KEY in Vercel, redeploy, then try again.";
+    }
+    if (/not found|NOT_FOUND|404|is not supported/i.test(message)) {
+      return "The configured Gemini model is unavailable. Set GEMINI_EXTRACTION_MODEL=gemini-2.5-flash in Vercel and redeploy.";
+    }
     return "Question extraction failed. Check your Gemini API key/model, then try again.";
   }
   if (/answer extraction/i.test(message)) {

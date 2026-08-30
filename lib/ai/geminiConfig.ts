@@ -1,13 +1,10 @@
-import { ThinkingLevel, type Schema } from "@google/genai";
+import { type Schema } from "@google/genai";
 
-/** Structured JSON generation config for Gemini 3.x (no deprecated temperature). */
-export function structuredJsonConfig(
-  schema: Schema,
-  thinkingLevel: ThinkingLevel = ThinkingLevel.MINIMAL,
-) {
+/** Structured JSON generation — compatible with Gemini 2.5 Flash on Google AI Studio. */
+export function structuredJsonConfig(schema: Schema) {
   return {
     responseMimeType: "application/json" as const,
     responseSchema: schema,
-    thinkingConfig: { thinkingLevel },
+    temperature: 0.1,
   };
 }

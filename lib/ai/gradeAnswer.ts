@@ -1,4 +1,4 @@
-import { Type, type Schema, ThinkingLevel } from "@google/genai";
+import { Type, type Schema } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
 import { GEMINI_MODEL } from "@/lib/ai/config";
 import { structuredJsonConfig } from "@/lib/ai/geminiConfig";
@@ -69,7 +69,7 @@ Rules:
     const response = await client.models.generateContent({
       model: GEMINI_MODEL,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: structuredJsonConfig(gradeSchema, ThinkingLevel.MEDIUM),
+      config: structuredJsonConfig(gradeSchema),
     });
     responseText = response.text;
   } catch (error) {

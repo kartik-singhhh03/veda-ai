@@ -40,7 +40,7 @@ Upload
 - **Next.js** (App Router) + **React** + **TypeScript**
 - **Tailwind CSS**
 - **Lucide React** icons
-- **Google Gemini** via `@google/genai` (`gemini-3.6-flash`)
+- **Google Gemini** via `@google/genai` (`gemini-2.5-flash` by default)
 - **unpdf** + **pdfjs-dist** + **@napi-rs/canvas** for PDF page rendering
 - **Node test runner** + **tsx** for unit tests
 
@@ -104,7 +104,7 @@ The viewer converts them to CSS percentages so the overlay stays aligned with a 
 
 ## AI Model
 
-The implementation uses **`gemini-3.6-flash`** (configured in `lib/ai/config.ts`) for:
+The implementation uses **`gemini-2.5-flash`** (configured in `lib/ai/config.ts`) for:
 
 - multimodal question extraction
 - multimodal answer extraction
@@ -168,7 +168,7 @@ npm run lint
 1. Push the repository to GitHub.
 2. Import the project in Vercel.
 3. Set environment variable **`GEMINI_API_KEY`** in the Vercel project settings.
-4. Optional: **`GEMINI_EXTRACTION_MODEL`** (defaults to `gemini-3.5-flash-lite` for vision/JSON extraction; grading uses `gemini-3.6-flash` in `lib/ai/config.ts`).
+4. Optional: **`GEMINI_EXTRACTION_MODEL`** / **`GEMINI_MODEL`** (default `gemini-2.5-flash`). New Google AI Studio **AQ.** auth keys are supported.
 5. Deploy.
 
 ### Runtime / duration
