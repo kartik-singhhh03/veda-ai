@@ -10,7 +10,7 @@ const orbitIcons = [
 export function UploadHero() {
   return (
     <div
-      className="relative mx-auto my-5 flex h-40 w-40 items-center justify-center sm:my-7 sm:h-48 sm:w-48"
+      className="relative mx-auto my-3 flex h-32 w-32 items-center justify-center sm:my-4 sm:h-36 sm:w-36 lg:my-2 lg:h-28 lg:w-28"
       role="img"
       aria-label="VedaAI teacher illustration"
     >
@@ -38,10 +38,10 @@ export function UploadHero() {
       {orbitIcons.map(({ Icon, className }) => (
         <span
           key={className}
-          className={`absolute flex h-8 w-8 items-center justify-center rounded-full bg-accent text-white shadow-md sm:h-9 sm:w-9 ${className}`}
+          className={`absolute flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white shadow-md sm:h-7 sm:w-7 lg:h-6 lg:w-6 ${className}`}
           aria-hidden
         >
-          <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+          <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" strokeWidth={2} />
         </span>
       ))}
     </div>

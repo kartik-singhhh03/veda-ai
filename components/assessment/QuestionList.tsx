@@ -23,7 +23,7 @@ export function QuestionList({
   const sorted = [...questions].sort((a, b) => a.order - b.order);
 
   return (
-    <section className="flex h-full min-h-0 flex-col">
+    <section className="flex min-h-0 flex-1 flex-col">
       <div className="mb-3 flex items-center justify-between gap-2 px-1">
         <h2 className="text-sm font-semibold text-foreground">Questions</h2>
         <span className="text-xs text-muted">{sorted.length}</span>

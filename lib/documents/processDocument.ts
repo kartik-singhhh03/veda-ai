@@ -1,19 +1,27 @@
-import { definePDFJSModule, getDocumentProxy, renderPageAsImage } from "unpdf";
+import { getDocumentProxy, renderPageAsImage } from "unpdf";
+import {
+  ensurePdfjsServer,
+  getPdfjsDocumentOptions,
+  probeCanvasModule,
+} from "@/lib/documents/pdfjsServer";
 import type { DocumentPage, ProcessedDocument } from "@/types/assessment";
 
 const PDF_RENDER_SCALE = 1.5;
 
-let pdfjsReady: Promise<void> | null = null;
+export type DocumentErrorCode =
+  | "PDFJS_ERROR"
+  | "PDF_PARSE_ERROR"
+  | "PDF_RENDER_ERROR"
+  | "CANVAS_LOAD_ERROR";
 
-async function ensurePdfjs(): Promise<void> {
-  if (!pdfjsReady) {
-    // Node must use the PDF.js legacy build. The modern build throws in Node
-    // (e.g. "hashOriginal.toHex is not a function" / DOMMatrix issues).
-    pdfjsReady = definePDFJSModule(
-      () => import("pdfjs-dist/legacy/build/pdf.mjs"),
-    ).then(() => undefined);
+export class DocumentProcessingError extends Error {
+  code: DocumentErrorCode;
+
+  constructor(code: DocumentErrorCode, message: string) {
+    super(message);
+    this.name = "DocumentProcessingError";
+    this.code = code;
   }
-  await pdfjsReady;
 }
 
 function isPdf(mimeType: string, fileName: string): boolean {
@@ -34,7 +42,6 @@ async function readImageDimensions(
   bytes: Uint8Array,
   mimeType: "image/png" | "image/jpeg",
 ): Promise<{ width: number; height: number }> {
-  // Lightweight header parse — avoids loading a full image decoder dependency.
   if (mimeType === "image/png") {
     if (bytes.length < 24) {
       throw new Error("Invalid PNG file.");
@@ -46,7 +53,6 @@ async function readImageDimensions(
     };
   }
 
-  // JPEG SOF scan
   let offset = 2;
   while (offset < bytes.length) {
     if (bytes[offset] !== 0xff) {
@@ -108,20 +114,39 @@ async function processPdfDocument(
   sourceName: string,
 ): Promise<ProcessedDocument> {
   try {
-    await ensurePdfjs();
+    await ensurePdfjsServer();
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unknown error";
-    console.error("[document] PDF.js module init failed:", detail);
-    throw new Error(`PDF engine failed to load: ${detail}`);
+    console.error("[document] PDFJS_ERROR:", detail);
+    throw new DocumentProcessingError(
+      "PDFJS_ERROR",
+      `PDF engine failed to load: ${detail}`,
+    );
+  }
+
+  const canvasOk = await probeCanvasModule();
+  if (!canvasOk) {
+    console.error("[document] CANVAS_LOAD_ERROR: @napi-rs/canvas unavailable");
+    throw new DocumentProcessingError(
+      "CANVAS_LOAD_ERROR",
+      "Canvas/native module failed: @napi-rs/canvas could not be loaded.",
+    );
   }
 
   let pdf;
   try {
-    pdf = await getDocumentProxy(bytes);
+    pdf = await getDocumentProxy(bytes, getPdfjsDocumentOptions());
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unknown error";
-    console.error("[document] PDF parse failed:", detail);
-    throw new Error(`PDF parsing failed: ${detail}`);
+    console.error("[document] PDF_PARSE_ERROR:", {
+      sourceName,
+      byteLength: bytes.byteLength,
+      detail,
+    });
+    throw new DocumentProcessingError(
+      "PDF_PARSE_ERROR",
+      `PDF parsing failed: ${detail}`,
+    );
   }
 
   const pageCount = pdf.numPages;
@@ -139,18 +164,27 @@ async function processPdfDocument(
       } catch (error) {
         const detail = error instanceof Error ? error.message : "Unknown error";
         console.error(
-          `[document] PDF render failed on page ${pageNumber}:`,
+          `[document] PDF_RENDER_ERROR page ${pageNumber}:`,
           detail,
         );
         if (/canvas|napi|native/i.test(detail)) {
-          throw new Error(`Canvas/native module failed: ${detail}`);
+          throw new DocumentProcessingError(
+            "CANVAS_LOAD_ERROR",
+            `Canvas/native module failed: ${detail}`,
+          );
         }
-        throw new Error(`PDF rendering failed on page ${pageNumber}: ${detail}`);
+        throw new DocumentProcessingError(
+          "PDF_RENDER_ERROR",
+          `PDF rendering failed on page ${pageNumber}: ${detail}`,
+        );
       }
 
       const match = /^data:(image\/png|image\/jpeg);base64,(.+)$/.exec(dataUrl);
       if (!match) {
-        throw new Error(`PDF rendering failed on page ${pageNumber}: invalid image output.`);
+        throw new DocumentProcessingError(
+          "PDF_RENDER_ERROR",
+          `PDF rendering failed on page ${pageNumber}: invalid image output.`,
+        );
       }
 
       const mimeType = match[1] as "image/png" | "image/jpeg";
@@ -165,7 +199,6 @@ async function processPdfDocument(
         bytes: pageBytes,
         width: Math.round(viewport.width),
         height: Math.round(viewport.height),
-        // Keep the render-time base64 so Gemini/API do not re-encode.
         imageBase64,
       });
     }
@@ -205,6 +238,9 @@ export async function processDocument(
 
     throw new Error("Unsupported file type. Please upload a PDF, PNG, JPG, or JPEG.");
   } catch (error) {
+    if (error instanceof DocumentProcessingError) {
+      throw error;
+    }
     if (error instanceof Error && error.message.startsWith("Unsupported")) {
       throw error;
     }
@@ -217,7 +253,6 @@ export async function processDocument(
       detail,
     });
 
-    // Preserve already-classified messages; wrap only generic failures.
     if (
       /PDF parsing failed|PDF rendering failed|PDF engine failed|Canvas\/native|Image processing failed/i.test(
         detail,

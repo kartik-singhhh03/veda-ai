@@ -99,7 +99,7 @@ export function AnswerSheetViewer({
   }
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-col">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-foreground">Answer Sheet</h2>
       </div>

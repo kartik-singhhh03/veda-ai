@@ -28,22 +28,24 @@ export function UploadScreen({
   const canStart = Boolean(questionPaper && answerSheet);
 
   return (
-    <div className="flex flex-1 flex-col px-4 py-6 sm:px-8 sm:py-8 lg:px-10">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center">
-        <h1 className="max-w-xl text-center text-2xl font-semibold tracking-tight text-foreground sm:text-3xl lg:text-[2rem] lg:leading-tight">
-          Upload{" "}
-          <span className="rounded-lg bg-accent-soft px-1.5 py-0.5 text-accent">
-            Question Paper &amp; Answer Sheets
+    <div className="flex min-h-0 flex-1 flex-col justify-center px-4 py-5 sm:px-8 sm:py-6 lg:px-10 lg:py-3">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center lg:max-w-4xl">
+        <h1 className="text-center text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-[1.75rem] lg:leading-tight xl:text-[1.875rem]">
+          <span className="inline-flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 lg:flex-nowrap">
+            <span>Upload</span>
+            <span className="whitespace-nowrap rounded-lg bg-accent-soft px-1.5 py-0.5 text-accent">
+              Question Paper &amp; Answer Sheets
+            </span>
           </span>
         </h1>
 
-        <p className="mt-3 text-center text-sm text-muted">
+        <p className="mt-2 text-center text-sm text-muted lg:mt-1.5">
           Upload both files to get started
         </p>
 
         <UploadHero />
 
-        <div className="mt-1 flex w-full flex-col gap-4 sm:mt-0 sm:flex-row sm:gap-5">
+        <div className="mt-0.5 flex w-full flex-col gap-3 sm:flex-row sm:gap-4 lg:gap-4">
           <UploadCard
             label="Upload"
             accentLabel="Question Paper"
@@ -63,7 +65,7 @@ export function UploadScreen({
         {error ? (
           <p
             role="alert"
-            className="mt-4 max-w-md rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-center text-sm font-medium text-danger"
+            className="mt-2 max-w-md rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-center text-sm font-medium text-danger lg:mt-2"
           >
             {error}
           </p>
@@ -74,7 +76,7 @@ export function UploadScreen({
           onClick={onStartMapping}
           disabled={!canStart}
           aria-disabled={!canStart}
-          className={`mt-8 inline-flex items-center justify-center gap-2 rounded-full px-10 py-3 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 sm:mt-10 ${
+          className={`mt-5 inline-flex items-center justify-center gap-2 rounded-full px-10 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 sm:mt-6 lg:mt-4 ${
             canStart
               ? "bg-button hover:bg-[#2b2b2b]"
               : "cursor-not-allowed bg-button-disabled"
@@ -84,7 +86,7 @@ export function UploadScreen({
           <ArrowRight className="h-4 w-4" aria-hidden />
         </button>
 
-        <p className="mt-3 max-w-sm text-center text-xs leading-relaxed text-muted sm:mt-4">
+        <p className="mt-2 max-w-sm text-center text-xs leading-relaxed text-muted">
           Once both files are uploaded, you&apos;ll be able to map answers with
           questions
         </p>

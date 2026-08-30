@@ -306,12 +306,12 @@ export function AppShell({
   collapsedSidebar = false,
 }: AppShellProps) {
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen min-h-0 overflow-hidden bg-background">
       <Sidebar collapsed={collapsedSidebar} />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileHeader />
         <TopHeader />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
           {children}
         </main>
       </div>

@@ -178,8 +178,8 @@ export function AssessmentWorkspace({
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4 lg:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex min-w-0 flex-col gap-3 p-3 sm:p-4 lg:min-h-0 lg:flex-1 lg:overflow-hidden lg:p-5">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 space-y-2">
           <h1 className="text-lg font-semibold text-foreground">Assessment</h1>
           <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
@@ -221,10 +221,12 @@ export function AssessmentWorkspace({
         </button>
       </div>
 
-      <UnmatchedAnswersPanel unmatchedCandidates={unmatchedCandidates} />
+      <div className="shrink-0">
+        <UnmatchedAnswersPanel unmatchedCandidates={unmatchedCandidates} />
+      </div>
 
       <div
-        className="flex rounded-full bg-surface p-1 lg:hidden"
+        className="flex shrink-0 rounded-full bg-surface p-1 lg:hidden"
         role="tablist"
         aria-label="Assessment views"
       >
@@ -252,24 +254,26 @@ export function AssessmentWorkspace({
         </button>
       </div>
 
-      <div className="grid min-h-0 min-w-0 flex-1 gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
         <div
-          className={`min-h-0 min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-sm ${
+          className={`min-w-0 flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm ${
             mobileTab === "questions" ? "flex" : "hidden"
-          } lg:flex`}
+          } lg:flex lg:min-h-0 lg:overflow-hidden`}
         >
-          <SelectedQuestionPanel
-            question={selectedQuestion}
-            answer={selectedAnswer}
-            isUnanswered={isUnanswered}
-            grade={
-              selectedQuestionId
-                ? gradesByQuestionId.get(selectedQuestionId) ?? null
-                : null
-            }
-            grading={gradingQuestionId === selectedQuestionId}
-            gradingError={gradingError}
-          />
+          <div className="shrink-0">
+            <SelectedQuestionPanel
+              question={selectedQuestion}
+              answer={selectedAnswer}
+              isUnanswered={isUnanswered}
+              grade={
+                selectedQuestionId
+                  ? gradesByQuestionId.get(selectedQuestionId) ?? null
+                  : null
+              }
+              grading={gradingQuestionId === selectedQuestionId}
+              gradingError={gradingError}
+            />
+          </div>
           <QuestionList
             questions={questions}
             answersByQuestionId={answersByQuestionId}
@@ -281,9 +285,9 @@ export function AssessmentWorkspace({
         </div>
 
         <div
-          className={`min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-sm ${
+          className={`min-w-0 flex-col rounded-2xl border border-border bg-card p-4 shadow-sm ${
             mobileTab === "answerSheet" ? "flex" : "hidden"
-          } lg:flex`}
+          } lg:flex lg:min-h-0 lg:overflow-hidden`}
         >
           <AnswerSheetViewer
             pages={answerPages}

@@ -181,6 +181,10 @@ npm run lint
 
 PDF rendering uses `@napi-rs/canvas` (native, Node-compatible; listed in `serverExternalPackages`). Edge runtime is not used for document processing.
 
+**Node.js 22.x** is required (`package.json` `engines`) so PDF.js and native canvas bindings match local/Vercel behavior.
+
+**PDF.js on Vercel / Turbopack:** the legacy worker must be preloaded on `globalThis.pdfjsWorker` (see `lib/documents/pdfjsServer.ts`). Dynamic `import(workerSrc)` breaks when Next externalizes `pdfjs-dist`.
+
 ### Payload / file-size assumptions
 
 Vercel Functions currently enforce ~**4.5 MB** request and response body limits.

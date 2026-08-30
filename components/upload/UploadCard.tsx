@@ -32,7 +32,7 @@ export function UploadCard({
   }
 
   return (
-    <div className="flex min-h-[148px] flex-1 items-center justify-center rounded-[22px] border border-dashed border-[#d6d6d6] bg-card px-4 py-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:min-h-[168px]">
+    <div className="flex min-h-[128px] flex-1 items-center justify-center rounded-[22px] border border-dashed border-[#d6d6d6] bg-card px-4 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:min-h-[140px] lg:min-h-[128px]">
       <input
         id={inputId}
         type="file"

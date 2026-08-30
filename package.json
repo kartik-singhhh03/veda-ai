@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx --yes tsx --test lib/mapping/normalizeQuestionId.test.ts lib/mapping/semanticGuards.test.ts lib/mapping/reviewStatus.test.ts lib/viewer/regions.test.ts lib/ai/validateGrade.test.ts lib/assessment/gradingSummary.test.ts lib/validation/file.test.ts"
+    "test": "npx --yes tsx --test lib/mapping/normalizeQuestionId.test.ts lib/mapping/semanticGuards.test.ts lib/mapping/reviewStatus.test.ts lib/viewer/regions.test.ts lib/ai/validateGrade.test.ts lib/assessment/gradingSummary.test.ts lib/validation/file.test.ts lib/documents/pdfjsServer.test.ts lib/documents/pdfjsServer.integration.test.ts"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
     "@google/genai": "^2.19.0",
