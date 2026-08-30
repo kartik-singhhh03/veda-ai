@@ -1,8 +1,11 @@
-/** Base64 from Uint8Array — safe when array is a subarray view (Vercel/serverless). */
+/** Independent copy — PDF.js may detach the original ArrayBuffer during parsing. */
+export function cloneBytes(bytes: Uint8Array): Uint8Array {
+  return Uint8Array.from(bytes);
+}
+
+/** Base64 from Uint8Array — copies bytes so detached ArrayBuffers are safe. */
 export function bytesToBase64(bytes: Uint8Array): string {
-  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString(
-    "base64",
-  );
+  return Buffer.from(cloneBytes(bytes)).toString("base64");
 }
 
 /** Some PDFs have leading whitespace or a BOM before the %PDF header. */

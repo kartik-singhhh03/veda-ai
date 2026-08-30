@@ -1,6 +1,7 @@
 import { jsonError, readUploadFile } from "@/lib/api/upload";
 import { extractQuestions } from "@/lib/ai/extractQuestions";
 import { geminiRuntimeSummary } from "@/lib/ai/config";
+import { cloneBytes } from "@/lib/documents/bytesToBase64";
 import { validatePageImage } from "@/lib/documents/imageSignature";
 import { probePdfjsAssets } from "@/lib/documents/pdfjsServer";
 import { processDocument } from "@/lib/documents/processDocument";
@@ -23,6 +24,10 @@ export async function POST(request: Request) {
     const isPdfFile =
       file.mimeType === "application/pdf" ||
       file.fileName.toLowerCase().endsWith(".pdf");
+
+    const uploadByteLength = file.bytes.byteLength;
+    // Clone before PDF.js — it can detach the upload ArrayBuffer during parsing.
+    const pdfFallbackBytes = isPdfFile ? cloneBytes(file.bytes) : undefined;
 
     const preprocessStarted = Date.now();
     const document = await processDocument(
@@ -50,7 +55,7 @@ export async function POST(request: Request) {
     console.info("[extract-questions] preprocess", {
       sourceName: document.sourceName,
       pageCount: document.pageCount,
-      uploadBytes: file.bytes.byteLength,
+      uploadBytes: uploadByteLength,
       pdfAssets,
       pageDiagnostics,
       preprocessMs,
@@ -59,11 +64,8 @@ export async function POST(request: Request) {
     const extractStarted = Date.now();
     const questions = await extractQuestions({
       pages: document.pages,
-      pdfFallback: isPdfFile
-        ? {
-            bytes: Uint8Array.from(file.bytes),
-            pageCount: document.pageCount,
-          }
+      pdfFallback: pdfFallbackBytes
+        ? { bytes: pdfFallbackBytes, pageCount: document.pageCount }
         : undefined,
     });
     const extractMs = Date.now() - extractStarted;

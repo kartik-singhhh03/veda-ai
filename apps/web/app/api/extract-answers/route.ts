@@ -1,5 +1,6 @@
 import { ApiError, jsonError, readUploadFile } from "@/lib/api/upload";
 import { extractAnswers } from "@/lib/ai/extractAnswers";
+import { cloneBytes } from "@/lib/documents/bytesToBase64";
 import { pageToBase64, processDocument } from "@/lib/documents/processDocument";
 import { MAX_VIEWER_PAGES_BASE64_BYTES } from "@/lib/limits";
 
@@ -12,6 +13,12 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = await readUploadFile(formData, "file");
 
+    const isPdfFile =
+      file.mimeType === "application/pdf" ||
+      file.fileName.toLowerCase().endsWith(".pdf");
+
+    const pdfFallbackBytes = isPdfFile ? cloneBytes(file.bytes) : undefined;
+
     const preprocessStarted = Date.now();
     const document = await processDocument(
       file.bytes,
@@ -20,15 +27,11 @@ export async function POST(request: Request) {
     );
     const preprocessMs = Date.now() - preprocessStarted;
 
-    const isPdfFile =
-      file.mimeType === "application/pdf" ||
-      file.fileName.toLowerCase().endsWith(".pdf");
-
     const extractStarted = Date.now();
     const answers = await extractAnswers({
       pages: document.pages,
-      pdfFallback: isPdfFile
-        ? { bytes: file.bytes, pageCount: document.pageCount }
+      pdfFallback: pdfFallbackBytes
+        ? { bytes: pdfFallbackBytes, pageCount: document.pageCount }
         : undefined,
     });
     const extractMs = Date.now() - extractStarted;
