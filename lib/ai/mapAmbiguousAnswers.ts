@@ -1,7 +1,13 @@
 import { Type, type Schema } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
 import { GEMINI_MODEL } from "@/lib/ai/config";
-import { structuredJsonConfig } from "@/lib/ai/geminiConfig";
+import { gradingJsonConfig } from "@/lib/ai/geminiConfig";
+import {
+  GRADING_MODEL_FALLBACKS,
+  isInvalidArgumentError,
+  isModelNotFoundError,
+  modelsToTry,
+} from "@/lib/ai/resolveModel";
 import { SEMANTIC_MATCH_THRESHOLD } from "@/lib/mapping/constants";
 import { buildQuestionIndex } from "@/lib/mapping/buildQuestionIndex";
 import { normalizeQuestionId } from "@/lib/mapping/normalizeQuestionId";
@@ -88,21 +94,35 @@ ${JSON.stringify(candidateSummaries, null, 2)}
 Return one match object per candidate id.`;
 
   let parsed: unknown;
-  try {
-    const client = getGeminiClient();
-    const response = await client.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: structuredJsonConfig(semanticBatchSchema),
-    });
+  const modelsToTryList = modelsToTry(GEMINI_MODEL, GRADING_MODEL_FALLBACKS);
 
-    if (!response.text) {
-      throw new Error("Empty semantic mapping response.");
+  for (const model of modelsToTryList) {
+    try {
+      const client = getGeminiClient();
+      const response = await client.models.generateContent({
+        model,
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: gradingJsonConfig(semanticBatchSchema),
+      });
+
+      if (!response.text) {
+        throw new Error("Empty semantic mapping response.");
+      }
+      parsed = JSON.parse(response.text);
+      break;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown Gemini error";
+      if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
+        console.warn(`[map-ambiguous] Model ${model} failed: ${message}`);
+        continue;
+      }
+      console.error("Semantic mapping failed:", error);
+      return { mapped: [], stillUnresolved: unresolvedCandidates };
     }
-    parsed = JSON.parse(response.text);
-  } catch (error) {
-    console.error("Semantic mapping failed:", error);
-    // Graceful degradation: keep exact matches; treat these as unmatched later.
+  }
+
+  if (parsed === undefined) {
     return { mapped: [], stillUnresolved: unresolvedCandidates };
   }
 

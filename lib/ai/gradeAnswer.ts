@@ -1,7 +1,13 @@
 import { Type, type Schema } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
 import { GEMINI_MODEL } from "@/lib/ai/config";
-import { structuredJsonConfig } from "@/lib/ai/geminiConfig";
+import { gradingJsonConfig } from "@/lib/ai/geminiConfig";
+import {
+  GRADING_MODEL_FALLBACKS,
+  isInvalidArgumentError,
+  isModelNotFoundError,
+  modelsToTry,
+} from "@/lib/ai/resolveModel";
 import { validateGradeResult } from "@/lib/ai/validateGrade";
 import type { Answer, GradeResult, Question } from "@/types/assessment";
 
@@ -64,35 +70,52 @@ Rules:
 8. For diagrams: only comment if the transcribed answer clearly describes diagram content; do not claim diagram correctness you cannot verify.
 9. Return JSON matching the schema.`;
 
-  let responseText: string | undefined;
-  try {
-    const response = await client.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: structuredJsonConfig(gradeSchema),
-    });
-    responseText = response.text;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown Gemini error";
-    console.error("Grading failed:", message);
-    throw new Error(`Grading failed: ${message}`);
+  const modelsToTryList = modelsToTry(GEMINI_MODEL, GRADING_MODEL_FALLBACKS);
+  let lastError: Error | null = null;
+
+  for (const model of modelsToTryList) {
+    let responseText: string | undefined;
+    try {
+      const response = await client.models.generateContent({
+        model,
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: gradingJsonConfig(gradeSchema),
+      });
+      responseText = response.text;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown Gemini error";
+      lastError = error instanceof Error ? error : new Error(message);
+
+      if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
+        console.warn(`[grade] Model ${model} failed: ${message}`);
+        continue;
+      }
+
+      console.error("Grading failed:", message);
+      throw new Error(`Grading failed: ${message}`);
+    }
+
+    if (!responseText) {
+      lastError = new Error("Gemini returned an empty grading response.");
+      continue;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      throw new Error("Gemini returned invalid JSON for grading.");
+    }
+
+    const validation = validateGradeResult(parsed, question);
+    if (!validation.ok) {
+      throw new Error(validation.error);
+    }
+
+    return validation.grade;
   }
 
-  if (!responseText) {
-    throw new Error("Gemini returned an empty grading response.");
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(responseText);
-  } catch {
-    throw new Error("Gemini returned invalid JSON for grading.");
-  }
-
-  const validation = validateGradeResult(parsed, question);
-  if (!validation.ok) {
-    throw new Error(validation.error);
-  }
-
-  return validation.grade;
+  const detail = lastError?.message ?? "All Gemini models failed.";
+  throw new Error(`Grading failed: ${detail}`);
 }

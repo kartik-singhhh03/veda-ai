@@ -49,12 +49,12 @@ function humanizeApiError(raw: string, fallback: string): string {
       return "Gemini API key is invalid on the server. Update GEMINI_API_KEY in Vercel, redeploy, then try again.";
     }
     if (/not found|NOT_FOUND|404|is not supported|no longer available/i.test(message)) {
-      return "Gemini model unavailable on the server. In Vercel, delete GEMINI_MODEL if set to gemini-3.x, redeploy, or set GEMINI_EXTRACTION_MODEL=gemini-2.5-flash.";
+      return "Gemini model unavailable on the server. In Vercel, set GEMINI_EXTRACTION_MODEL=gemini-3.5-flash-lite and GEMINI_MODEL=gemini-3.6-flash, then redeploy.";
     }
     return "Question extraction failed. Check Gemini API key and model settings on Vercel, then redeploy.";
   }
   if (/no longer available|NOT_FOUND|model.*not found/i.test(message)) {
-    return "The configured Gemini model is unavailable. Set GEMINI_EXTRACTION_MODEL=gemini-2.5-flash in Vercel and redeploy.";
+    return "The configured Gemini model is unavailable. Set GEMINI_EXTRACTION_MODEL=gemini-3.5-flash-lite in Vercel and redeploy.";
   }
   if (/answer extraction/i.test(message)) {
     return "Answer extraction failed. Please try uploading the answer sheet again.";

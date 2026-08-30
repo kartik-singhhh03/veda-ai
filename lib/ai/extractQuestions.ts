@@ -1,10 +1,12 @@
 import { Type, type Schema } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
 import { GEMINI_EXTRACTION_MODEL } from "@/lib/ai/config";
-import { structuredJsonConfig } from "@/lib/ai/geminiConfig";
+import { extractionJsonConfig } from "@/lib/ai/geminiConfig";
 import {
-  GEMINI_MODEL_FALLBACKS,
+  EXTRACTION_MODEL_FALLBACKS,
+  isInvalidArgumentError,
   isModelNotFoundError,
+  modelsToTry,
 } from "@/lib/ai/resolveModel";
 import { pageToBase64 } from "@/lib/documents/processDocument";
 import { validateQuestions } from "@/lib/ai/validateQuestions";
@@ -118,20 +120,20 @@ async function callGemini(
 ): Promise<Question[]> {
   const client = getGeminiClient();
 
-  const modelsToTry = [
+  const modelsToTryList = modelsToTry(
     GEMINI_EXTRACTION_MODEL,
-    ...GEMINI_MODEL_FALLBACKS.filter((m) => m !== GEMINI_EXTRACTION_MODEL),
-  ];
+    EXTRACTION_MODEL_FALLBACKS,
+  );
 
   let lastError: Error | null = null;
 
-  for (const model of modelsToTry) {
+  for (const model of modelsToTryList) {
     let responseText: string | undefined;
     try {
       const response = await client.models.generateContent({
         model,
         contents: [{ role: "user", parts }],
-        config: structuredJsonConfig(questionResponseSchema),
+        config: extractionJsonConfig(questionResponseSchema),
       });
       responseText = response.text;
 
@@ -174,8 +176,8 @@ async function callGemini(
         error instanceof Error ? error.message : "Unknown Gemini error";
       lastError = error instanceof Error ? error : new Error(message);
 
-      if (isModelNotFoundError(message)) {
-        console.warn(`[extract-questions] Model ${model} unavailable: ${message}`);
+      if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
+        console.warn(`[extract-questions] Model ${model} failed: ${message}`);
         continue;
       }
 

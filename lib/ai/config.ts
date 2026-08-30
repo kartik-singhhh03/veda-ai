@@ -1,15 +1,18 @@
 import {
+  EXTRACTION_MODEL_DEFAULT,
+  GRADING_MODEL_DEFAULT,
   geminiRuntimeSummary,
   resolveGeminiModel,
 } from "@/lib/ai/resolveModel";
 
-/** Default model for grading and semantic mapping. */
-export const GEMINI_MODEL = resolveGeminiModel(process.env.GEMINI_MODEL);
+export const GEMINI_MODEL = resolveGeminiModel(
+  process.env.GEMINI_MODEL,
+  GRADING_MODEL_DEFAULT,
+);
 
-/** Vision/PDF extraction model (same allowlist + fallbacks as GEMINI_MODEL). */
 export const GEMINI_EXTRACTION_MODEL = resolveGeminiModel(
   process.env.GEMINI_EXTRACTION_MODEL,
-  GEMINI_MODEL,
+  EXTRACTION_MODEL_DEFAULT,
 );
 
 export { geminiRuntimeSummary };
