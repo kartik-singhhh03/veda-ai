@@ -1,8 +1,9 @@
 import {
   EXTRACTION_MODEL_DEFAULT,
-  GRADING_MODEL_DEFAULT,
   geminiRuntimeSummary,
+  resolveExtractionModel,
   resolveGeminiModel,
+  GRADING_MODEL_DEFAULT,
 } from "@/lib/ai/resolveModel";
 
 export const GEMINI_MODEL = resolveGeminiModel(
@@ -10,9 +11,8 @@ export const GEMINI_MODEL = resolveGeminiModel(
   GRADING_MODEL_DEFAULT,
 );
 
-export const GEMINI_EXTRACTION_MODEL = resolveGeminiModel(
+export const GEMINI_EXTRACTION_MODEL = resolveExtractionModel(
   process.env.GEMINI_EXTRACTION_MODEL,
-  EXTRACTION_MODEL_DEFAULT,
 );
 
 export { geminiRuntimeSummary };
@@ -27,3 +27,5 @@ export function getGeminiApiKey(): string {
   }
   return key;
 }
+
+export { EXTRACTION_MODEL_DEFAULT };

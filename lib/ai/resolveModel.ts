@@ -4,15 +4,12 @@ export const EXTRACTION_MODEL_DEFAULT = "gemini-3.5-flash-lite";
 /** Default for grading and semantic mapping. */
 export const GRADING_MODEL_DEFAULT = "gemini-3.6-flash";
 
-/** Try in order when Gemini returns 404 for a model. */
-export const EXTRACTION_MODEL_FALLBACKS = [
-  "gemini-3.5-flash-lite",
-  "gemini-3.6-flash",
-] as const;
+/** Only used when the configured extraction model returns 404. */
+export const EXTRACTION_MODEL_FALLBACKS = [EXTRACTION_MODEL_DEFAULT] as const;
 
 export const GRADING_MODEL_FALLBACKS = [
-  "gemini-3.6-flash",
-  "gemini-3.5-flash-lite",
+  GRADING_MODEL_DEFAULT,
+  EXTRACTION_MODEL_DEFAULT,
 ] as const;
 
 /** Legacy 2.x models — Google rejects these for new AQ API keys. */
@@ -50,6 +47,18 @@ export function resolveGeminiModel(
   return candidate;
 }
 
+/** Vision extraction should stay on flash-lite (cheaper quota, better for images). */
+export function resolveExtractionModel(envValue: string | undefined): string {
+  const resolved = resolveGeminiModel(envValue, EXTRACTION_MODEL_DEFAULT);
+  if (resolved === GRADING_MODEL_DEFAULT) {
+    console.warn(
+      `[gemini] ${resolved} is for grading — using ${EXTRACTION_MODEL_DEFAULT} for extraction.`,
+    );
+    return EXTRACTION_MODEL_DEFAULT;
+  }
+  return resolved;
+}
+
 export function modelsToTry(
   primary: string,
   fallbacks: readonly string[],
@@ -67,6 +76,12 @@ export function isInvalidArgumentError(message: string): boolean {
   return /INVALID_ARGUMENT|invalid argument|400/i.test(message);
 }
 
+export function isQuotaError(message: string): boolean {
+  return /429|RESOURCE_EXHAUSTED|quota exceeded|rate limit|rate-limit/i.test(
+    message,
+  );
+}
+
 /** Safe runtime summary for server logs (never log full API keys). */
 export function geminiRuntimeSummary(): {
   model: string;
@@ -78,9 +93,8 @@ export function geminiRuntimeSummary(): {
     process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim();
   return {
     model: resolveGeminiModel(process.env.GEMINI_MODEL, GRADING_MODEL_DEFAULT),
-    extractionModel: resolveGeminiModel(
+    extractionModel: resolveExtractionModel(
       process.env.GEMINI_EXTRACTION_MODEL,
-      EXTRACTION_MODEL_DEFAULT,
     ),
     hasApiKey: Boolean(key),
     keyPrefix: key ? key.slice(0, 6) : null,

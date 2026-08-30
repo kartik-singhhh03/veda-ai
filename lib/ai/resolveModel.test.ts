@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   EXTRACTION_MODEL_DEFAULT,
   GRADING_MODEL_DEFAULT,
+  resolveExtractionModel,
   resolveGeminiModel,
 } from "./resolveModel";
 
@@ -34,8 +35,17 @@ describe("resolveGeminiModel", () => {
       resolveGeminiModel("gemini-2.5-flash", EXTRACTION_MODEL_DEFAULT),
       "gemini-3.5-flash-lite",
     );
+  });
+});
+
+describe("resolveExtractionModel", () => {
+  it("defaults to flash-lite", () => {
+    assert.equal(resolveExtractionModel(undefined), "gemini-3.5-flash-lite");
+  });
+
+  it("redirects gemini-3.6-flash to flash-lite for extraction", () => {
     assert.equal(
-      resolveGeminiModel("gemini-3.5-flash-lite", GRADING_MODEL_DEFAULT),
+      resolveExtractionModel("gemini-3.6-flash"),
       "gemini-3.5-flash-lite",
     );
   });

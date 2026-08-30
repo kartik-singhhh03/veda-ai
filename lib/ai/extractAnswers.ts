@@ -1,70 +1,7 @@
-import { Type, type Schema } from "@google/genai";
-import { getGeminiClient } from "@/lib/ai/client";
-import { GEMINI_EXTRACTION_MODEL } from "@/lib/ai/config";
-import { extractionJsonConfig, jsonMimeConfig } from "@/lib/ai/geminiConfig";
-import {
-  EXTRACTION_MODEL_FALLBACKS,
-  isInvalidArgumentError,
-  isModelNotFoundError,
-  modelsToTry,
-} from "@/lib/ai/resolveModel";
 import { pageToBase64 } from "@/lib/documents/processDocument";
+import { generateExtractionJson } from "@/lib/ai/generateExtraction";
 import { validateAnswerCandidates } from "@/lib/ai/validateAnswers";
 import type { AnswerCandidate, DocumentPage } from "@/types/assessment";
-
-const answerResponseSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    answers: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          id: {
-            type: Type.STRING,
-            description: "Stable candidate id, e.g. answer-7",
-          },
-          questionReference: {
-            type: Type.STRING,
-            description:
-              "Visible reference as written by the student (Q7, 7, 11(a), etc.) or omit if unclear",
-          },
-          text: {
-            type: Type.STRING,
-            description: "Transcribed handwritten answer text",
-          },
-          confidence: {
-            type: Type.NUMBER,
-            description: "Confidence from 0 to 1",
-          },
-          regions: {
-            type: Type.ARRAY,
-            description:
-              "One or more regions covering this answer. Multi-page answers use multiple regions.",
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                page: {
-                  type: Type.INTEGER,
-                  description: "1-based page number",
-                },
-                box_2d: {
-                  type: Type.ARRAY,
-                  description:
-                    "Bounding box as [ymin, xmin, ymax, xmax] normalized to 0-1000 relative to that page",
-                  items: { type: Type.NUMBER },
-                },
-              },
-              required: ["page", "box_2d"],
-            },
-          },
-        },
-        required: ["id", "questionReference", "text", "confidence", "regions"],
-      },
-    },
-  },
-  required: ["answers"],
-};
 
 const ANSWER_PROMPT = `You are extracting handwritten student answers from an answer sheet.
 
@@ -84,7 +21,7 @@ Rules:
 9. Do NOT include unrelated answers in the same box.
 10. confidence is between 0 and 1.
 
-Return JSON matching the schema.`;
+Return JSON: { "answers": [ { "id", "questionReference", "text", "confidence", "regions": [ { "page", "box_2d" } ] } ] }`;
 
 export async function extractAnswers(
   pages: DocumentPage[],
@@ -92,8 +29,6 @@ export async function extractAnswers(
   if (pages.length === 0) {
     throw new Error("No pages available for answer extraction.");
   }
-
-  const client = getGeminiClient();
 
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
     { text: ANSWER_PROMPT },
@@ -112,79 +47,36 @@ export async function extractAnswers(
     });
   }
 
-  const modelsToTryList = modelsToTry(
-    GEMINI_EXTRACTION_MODEL,
-    EXTRACTION_MODEL_FALLBACKS,
-  );
-
-  let lastError: Error | null = null;
-
-  for (const model of modelsToTryList) {
-    const configs = [
-      { label: "schema", config: extractionJsonConfig(answerResponseSchema) },
-      { label: "mime", config: jsonMimeConfig() },
-      { label: "plain", config: undefined },
-    ];
-
-    for (const { label, config } of configs) {
-      let responseText: string | undefined;
-      try {
-        const response = await client.models.generateContent({
-          model,
-          contents: [{ role: "user", parts }],
-          ...(config ? { config } : {}),
-        });
-        responseText = response.text;
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Unknown Gemini error";
-        lastError = error instanceof Error ? error : new Error(message);
-
-        if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
-          console.warn(
-            `[extract-answers] Model ${model} (${label}) failed: ${message}`,
-          );
-          continue;
-        }
-
-        console.error("Gemini answer extraction failed:", message);
-        throw new Error(`Gemini answer extraction failed: ${message}`);
-      }
-
-      if (!responseText) {
-        lastError = new Error(
-          "Gemini returned an empty answer extraction response.",
-        );
-        continue;
-      }
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(responseText);
-      } catch {
-        throw new Error("Gemini returned invalid JSON for answer extraction.");
-      }
-
-      const validation = validateAnswerCandidates(parsed, pages.length);
-      if (!validation.ok) {
-        console.error("Answer validation failed:", validation.details);
-        throw new Error(
-          validation.details?.length
-            ? `${validation.error} ${validation.details.slice(0, 5).join("; ")}`
-            : validation.error,
-        );
-      }
-
-      if (model !== GEMINI_EXTRACTION_MODEL || label !== "schema") {
-        console.warn(
-          `[extract-answers] Used ${model} with ${label} config (configured: ${GEMINI_EXTRACTION_MODEL})`,
-        );
-      }
-
-      return validation.answers;
-    }
+  let responseText: string;
+  try {
+    responseText = await generateExtractionJson(parts, "extract-answers");
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown Gemini error";
+    console.error("Gemini answer extraction failed:", message);
+    throw new Error(
+      message.includes("quota")
+        ? message
+        : `Gemini answer extraction failed: ${message}`,
+    );
   }
 
-  const detail = lastError?.message ?? "All Gemini models failed.";
-  throw new Error(`Gemini answer extraction failed: ${detail}`);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    throw new Error("Gemini returned invalid JSON for answer extraction.");
+  }
+
+  const validation = validateAnswerCandidates(parsed, pages.length);
+  if (!validation.ok) {
+    console.error("Answer validation failed:", validation.details);
+    throw new Error(
+      validation.details?.length
+        ? `${validation.error} ${validation.details.slice(0, 5).join("; ")}`
+        : validation.error,
+    );
+  }
+
+  return validation.answers;
 }
