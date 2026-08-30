@@ -10,7 +10,10 @@ export const maxDuration = 60;
 export async function POST(request: Request) {
   const started = Date.now();
   const gemini = geminiRuntimeSummary();
-  console.info("[extract-questions] gemini config", gemini);
+  console.info("[extract-questions] gemini config", {
+    ...gemini,
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+  });
 
   try {
     const formData = await request.formData();

@@ -48,7 +48,7 @@ function humanizeApiError(raw: string, fallback: string): string {
     return message;
   }
   if (/question extraction failed validation|no questions were extracted/i.test(message)) {
-    return "Question extraction failed. Please try uploading the question paper again.";
+    return "Question extraction failed — Gemini returned no questions. Open /api/health to verify deploy + API key, then redeploy Vercel with GEMINI_API_KEY and GEMINI_EXTRACTION_MODEL=gemini-3.5-flash-lite.";
   }
   if (/Gemini question extraction failed/i.test(message)) {
     if (/API key not valid|401|403|PERMISSION_DENIED|API_KEY_INVALID/i.test(message)) {
