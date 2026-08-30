@@ -168,7 +168,9 @@ npm run lint
 1. Push the repository to GitHub.
 2. Import the project in Vercel.
 3. Set environment variable **`GEMINI_API_KEY`** in the Vercel project settings.
-4. Optional: **`GEMINI_EXTRACTION_MODEL`** / **`GEMINI_MODEL`** (default `gemini-2.5-flash`). New Google AI Studio **AQ.** auth keys are supported.
+4. Optional env overrides (usually **not needed**):
+   - `GEMINI_EXTRACTION_MODEL` / `GEMINI_MODEL` — must be `gemini-2.5-flash`, `gemini-2.0-flash`, or `gemini-2.5-flash-lite`. Values like `gemini-3.6-flash` are **ignored** automatically.
+   - If localhost works but Vercel fails with “model unavailable”, check Vercel env vars: delete stale `GEMINI_MODEL=gemini-3.x`, confirm `GEMINI_API_KEY` matches local, then **Redeploy**.
 5. Deploy.
 
 ### Runtime / duration

@@ -41,20 +41,20 @@ function humanizeApiError(raw: string, fallback: string): string {
       ? message
       : "File is too large for the current deployment limit (max 4MB).";
   }
-  if (/no longer available|NOT_FOUND|model.*not found/i.test(message)) {
-    return "The configured Gemini model is unavailable. Update GEMINI_MODEL in lib/ai/config.ts and restart the server.";
-  }
   if (/question extraction failed validation|no questions were extracted/i.test(message)) {
     return "Question extraction failed. Please try uploading the question paper again.";
   }
   if (/Gemini question extraction failed/i.test(message)) {
     if (/API key not valid|401|403|PERMISSION_DENIED|API_KEY_INVALID/i.test(message)) {
-      return "Gemini API key is invalid. Update GEMINI_API_KEY in Vercel, redeploy, then try again.";
+      return "Gemini API key is invalid on the server. Update GEMINI_API_KEY in Vercel, redeploy, then try again.";
     }
-    if (/not found|NOT_FOUND|404|is not supported/i.test(message)) {
-      return "The configured Gemini model is unavailable. Set GEMINI_EXTRACTION_MODEL=gemini-2.5-flash in Vercel and redeploy.";
+    if (/not found|NOT_FOUND|404|is not supported|no longer available/i.test(message)) {
+      return "Gemini model unavailable on the server. In Vercel, delete GEMINI_MODEL if set to gemini-3.x, redeploy, or set GEMINI_EXTRACTION_MODEL=gemini-2.5-flash.";
     }
-    return "Question extraction failed. Check your Gemini API key/model, then try again.";
+    return "Question extraction failed. Check Gemini API key and model settings on Vercel, then redeploy.";
+  }
+  if (/no longer available|NOT_FOUND|model.*not found/i.test(message)) {
+    return "The configured Gemini model is unavailable. Set GEMINI_EXTRACTION_MODEL=gemini-2.5-flash in Vercel and redeploy.";
   }
   if (/answer extraction/i.test(message)) {
     return "Answer extraction failed. Please try uploading the answer sheet again.";

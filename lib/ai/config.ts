@@ -1,10 +1,18 @@
-/** Default model — widely available on Google AI Studio (AIza and AQ auth keys). */
-export const GEMINI_MODEL =
-  process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+import {
+  geminiRuntimeSummary,
+  resolveGeminiModel,
+} from "@/lib/ai/resolveModel";
 
-/** Vision/PDF extraction uses the same default unless overridden. */
-export const GEMINI_EXTRACTION_MODEL =
-  process.env.GEMINI_EXTRACTION_MODEL?.trim() || GEMINI_MODEL;
+/** Default model for grading and semantic mapping. */
+export const GEMINI_MODEL = resolveGeminiModel(process.env.GEMINI_MODEL);
+
+/** Vision/PDF extraction model (same allowlist + fallbacks as GEMINI_MODEL). */
+export const GEMINI_EXTRACTION_MODEL = resolveGeminiModel(
+  process.env.GEMINI_EXTRACTION_MODEL,
+  GEMINI_MODEL,
+);
+
+export { geminiRuntimeSummary };
 
 export function getGeminiApiKey(): string {
   const key =

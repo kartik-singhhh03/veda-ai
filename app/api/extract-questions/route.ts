@@ -1,4 +1,5 @@
 import { extractQuestions } from "@/lib/ai/extractQuestions";
+import { geminiRuntimeSummary } from "@/lib/ai/config";
 import { jsonError, readUploadFile } from "@/lib/api/upload";
 import { getPdfPageCount } from "@/lib/documents/pdfPageCount";
 import { processDocument } from "@/lib/documents/processDocument";
@@ -15,6 +16,9 @@ function isPdf(mimeType: string, fileName: string): boolean {
 
 export async function POST(request: Request) {
   const started = Date.now();
+  const gemini = geminiRuntimeSummary();
+  console.info("[extract-questions] gemini config", gemini);
+
   try {
     const formData = await request.formData();
     const file = await readUploadFile(formData, "file");
