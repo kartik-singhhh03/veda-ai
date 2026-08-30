@@ -44,6 +44,9 @@ function humanizeApiError(raw: string, fallback: string): string {
   if (/quota exceeded|RESOURCE_EXHAUSTED|rate.limit|429/i.test(message)) {
     return "Gemini API quota exceeded. Wait about a minute and try again, or enable billing in Google AI Studio.";
   }
+  if (/PDF page renders look blank/i.test(message)) {
+    return message;
+  }
   if (/question extraction failed validation|no questions were extracted/i.test(message)) {
     return "Question extraction failed. Please try uploading the question paper again.";
   }
