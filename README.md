@@ -5,6 +5,8 @@ VedaAI helps teachers map a printed question paper to a student's handwritten an
 Teachers upload two files (PDF or image). The app extracts questions, extracts handwritten answer candidates with page regions, maps answers to questions, highlights the exact region on the answer sheet, and can provide optional AI-assisted grading feedback.
 
 This project was built as a focused hiring assignment: a Next.js monorepo with in-memory processing, no authentication, and no database.
+![Uploading image.png…]()
+
 
 ## Repository Structure
 
