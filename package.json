@@ -1,36 +1,30 @@
 {
-  "name": "vedaai",
+  "name": "vedaai-assessment-mapping",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "test": "npx --yes tsx --test lib/mapping/normalizeQuestionId.test.ts lib/mapping/semanticGuards.test.ts lib/mapping/reviewStatus.test.ts lib/viewer/regions.test.ts lib/ai/validateGrade.test.ts lib/ai/validateQuestions.test.ts lib/ai/resolveModel.test.ts lib/ai/parseGeminiJson.test.ts lib/assessment/gradingSummary.test.ts lib/validation/file.test.ts lib/documents/bytesToBase64.test.ts lib/documents/pdfjsServer.test.ts lib/documents/pdfjsServer.integration.test.ts"
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "start": "npm --workspace @vedaai/web run start",
+    "lint": "turbo lint",
+    "test": "turbo test"
   },
   "engines": {
     "node": "22.x"
   },
-  "dependencies": {
-    "@google/genai": "^2.19.0",
-    "@napi-rs/canvas": "^1.0.8",
-    "lucide-react": "^1.34.0",
-    "next": "16.3.3",
-    "pdfjs-dist": "^6.2.108",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "unpdf": "^1.8.1"
+  "packageManager": "npm@10.8.1",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "10.8.1",
+      "onFail": "ignore"
+    }
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "babel-plugin-react-compiler": "1.0.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.3",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "turbo": "^2.10.12"
   }
 }
