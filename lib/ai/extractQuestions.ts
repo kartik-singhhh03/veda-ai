@@ -1,11 +1,12 @@
+import { bytesToBase64, isPdfBytes } from "@/lib/documents/bytesToBase64";
 import { pageToBase64 } from "@/lib/documents/processDocument";
 import { generateExtractionJson } from "@/lib/ai/generateExtraction";
 import {
   normalizeQuestionsPayload,
   parseGeminiJson,
 } from "@/lib/ai/parseGeminiJson";
+import { GRADING_MODEL_DEFAULT } from "@/lib/ai/resolveModel";
 import {
-  GRADING_MODEL_DEFAULT,
   isInvalidArgumentError,
   isModelNotFoundError,
   isQuotaError,
@@ -57,7 +58,7 @@ function buildPdfParts(bytes: Uint8Array, pageCount: number): GeminiPart[] {
     {
       inlineData: {
         mimeType: "application/pdf",
-        data: Buffer.from(bytes).toString("base64"),
+        data: bytesToBase64(bytes),
       },
     },
   ];
@@ -111,6 +112,8 @@ function pageMeta(pages: DocumentPage[]) {
   };
 }
 
+let lastExtractDebug = "";
+
 async function extractOnce(attempt: ExtractAttempt): Promise<Question[] | null> {
   const { parts, label, meta, model, plain } = attempt;
 
@@ -120,6 +123,8 @@ async function extractOnce(attempt: ExtractAttempt): Promise<Question[] | null> 
       `extract-questions:${label}`,
       { model, plain },
     );
+
+    lastExtractDebug = `[${label}] ${responseText.slice(0, 200)}`;
 
     let parsed: unknown;
     try {
@@ -153,6 +158,7 @@ async function extractOnce(attempt: ExtractAttempt): Promise<Question[] | null> 
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown Gemini error";
+    lastExtractDebug = `[${label}] error: ${message.slice(0, 200)}`;
 
     if (isQuotaError(message)) {
       throw new Error(message);
@@ -182,20 +188,23 @@ export async function extractQuestions(
   }
 
   const meta = pageMeta(pages);
+  lastExtractDebug = "";
 
+  if (pdfFallback && pdfFallback.bytes.byteLength > 0 && !isPdfBytes(pdfFallback.bytes)) {
+    console.error("[extract-questions] uploaded bytes are not a valid PDF header", {
+      byteLength: pdfFallback.bytes.byteLength,
+      header: bytesToBase64(pdfFallback.bytes.slice(0, 8)),
+    });
+  }
+
+  // Keep Gemini calls minimal (free tier) — local + Vercel both use same order.
   const attempts: ExtractAttempt[] = [];
 
-  if (pdfFallback && pdfFallback.bytes.byteLength > 0) {
+  if (pdfFallback && pdfFallback.bytes.byteLength > 0 && isPdfBytes(pdfFallback.bytes)) {
     attempts.push({
       parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
       label: "pdf",
       meta: { ...meta, input: "pdf", pdfBytes: pdfFallback.bytes.byteLength },
-    });
-    attempts.push({
-      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
-      label: "pdf-plain",
-      meta: { ...meta, input: "pdf", pdfBytes: pdfFallback.bytes.byteLength },
-      plain: true,
     });
   }
 
@@ -205,14 +214,7 @@ export async function extractQuestions(
     meta: { ...meta, input: "images" },
   });
 
-  attempts.push({
-    parts: buildImageParts(pages),
-    label: "images-plain",
-    meta: { ...meta, input: "images" },
-    plain: true,
-  });
-
-  if (pdfFallback && pdfFallback.bytes.byteLength > 0) {
+  if (pdfFallback && pdfFallback.bytes.byteLength > 0 && isPdfBytes(pdfFallback.bytes)) {
     attempts.push({
       parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
       label: "pdf-3.6",
@@ -229,7 +231,6 @@ export async function extractQuestions(
     }
   }
 
-  // Per-page — only when multi-page and batch attempts failed.
   if (pages.length > 1) {
     const perPage: Question[][] = [];
     for (const page of pages) {
@@ -237,7 +238,6 @@ export async function extractQuestions(
         parts: buildImageParts([page]),
         label: `page-${page.pageNumber}`,
         meta: { ...meta, input: "images", singlePage: page.pageNumber },
-        plain: true,
       });
       if (chunk && chunk.length > 0) {
         perPage.push(chunk);
@@ -254,5 +254,8 @@ export async function extractQuestions(
     );
   }
 
-  throw new Error("No questions were extracted from the document.");
+  const debugHint = lastExtractDebug
+    ? ` Last response: ${lastExtractDebug}`
+    : "";
+  throw new Error(`No questions were extracted from the document.${debugHint}`);
 }

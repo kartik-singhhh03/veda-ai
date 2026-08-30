@@ -1,3 +1,4 @@
+import { bytesToBase64 } from "@/lib/documents/bytesToBase64";
 import { getDocumentProxy, renderPageAsImage } from "unpdf";
 import {
   ensurePdfjsServer,
@@ -273,5 +274,5 @@ export async function processDocument(
 
 export function pageToBase64(page: DocumentPage): string {
   if (page.imageBase64) return page.imageBase64;
-  return Buffer.from(page.bytes).toString("base64");
+  return bytesToBase64(page.bytes);
 }
