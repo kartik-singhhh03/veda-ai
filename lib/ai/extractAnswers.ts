@@ -1,7 +1,7 @@
 import { Type, type Schema } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
 import { GEMINI_EXTRACTION_MODEL } from "@/lib/ai/config";
-import { extractionJsonConfig } from "@/lib/ai/geminiConfig";
+import { extractionJsonConfig, jsonMimeConfig } from "@/lib/ai/geminiConfig";
 import {
   EXTRACTION_MODEL_FALLBACKS,
   isInvalidArgumentError,
@@ -26,9 +26,8 @@ const answerResponseSchema: Schema = {
           },
           questionReference: {
             type: Type.STRING,
-            nullable: true,
             description:
-              "Visible reference as written by the student (Q7, 7, 11(a), etc.) or null if unclear",
+              "Visible reference as written by the student (Q7, 7, 11(a), etc.) or omit if unclear",
           },
           text: {
             type: Type.STRING,
@@ -121,57 +120,69 @@ export async function extractAnswers(
   let lastError: Error | null = null;
 
   for (const model of modelsToTryList) {
-    let responseText: string | undefined;
-    try {
-      const response = await client.models.generateContent({
-        model,
-        contents: [{ role: "user", parts }],
-        config: extractionJsonConfig(answerResponseSchema),
-      });
-      responseText = response.text;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown Gemini error";
-      lastError = error instanceof Error ? error : new Error(message);
+    const configs = [
+      { label: "schema", config: extractionJsonConfig(answerResponseSchema) },
+      { label: "mime", config: jsonMimeConfig() },
+      { label: "plain", config: undefined },
+    ];
 
-      if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
-        console.warn(`[extract-answers] Model ${model} failed: ${message}`);
+    for (const { label, config } of configs) {
+      let responseText: string | undefined;
+      try {
+        const response = await client.models.generateContent({
+          model,
+          contents: [{ role: "user", parts }],
+          ...(config ? { config } : {}),
+        });
+        responseText = response.text;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown Gemini error";
+        lastError = error instanceof Error ? error : new Error(message);
+
+        if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
+          console.warn(
+            `[extract-answers] Model ${model} (${label}) failed: ${message}`,
+          );
+          continue;
+        }
+
+        console.error("Gemini answer extraction failed:", message);
+        throw new Error(`Gemini answer extraction failed: ${message}`);
+      }
+
+      if (!responseText) {
+        lastError = new Error(
+          "Gemini returned an empty answer extraction response.",
+        );
         continue;
       }
 
-      console.error("Gemini answer extraction failed:", message);
-      throw new Error(`Gemini answer extraction failed: ${message}`);
-    }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        throw new Error("Gemini returned invalid JSON for answer extraction.");
+      }
 
-    if (!responseText) {
-      lastError = new Error("Gemini returned an empty answer extraction response.");
-      continue;
-    }
+      const validation = validateAnswerCandidates(parsed, pages.length);
+      if (!validation.ok) {
+        console.error("Answer validation failed:", validation.details);
+        throw new Error(
+          validation.details?.length
+            ? `${validation.error} ${validation.details.slice(0, 5).join("; ")}`
+            : validation.error,
+        );
+      }
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      throw new Error("Gemini returned invalid JSON for answer extraction.");
-    }
+      if (model !== GEMINI_EXTRACTION_MODEL || label !== "schema") {
+        console.warn(
+          `[extract-answers] Used ${model} with ${label} config (configured: ${GEMINI_EXTRACTION_MODEL})`,
+        );
+      }
 
-    const validation = validateAnswerCandidates(parsed, pages.length);
-    if (!validation.ok) {
-      console.error("Answer validation failed:", validation.details);
-      throw new Error(
-        validation.details?.length
-          ? `${validation.error} ${validation.details.slice(0, 5).join("; ")}`
-          : validation.error,
-      );
+      return validation.answers;
     }
-
-    if (model !== GEMINI_EXTRACTION_MODEL) {
-      console.warn(
-        `[extract-answers] Used fallback model ${model} (configured: ${GEMINI_EXTRACTION_MODEL})`,
-      );
-    }
-
-    return validation.answers;
   }
 
   const detail = lastError?.message ?? "All Gemini models failed.";

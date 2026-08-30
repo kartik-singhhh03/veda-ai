@@ -1,7 +1,7 @@
 import { Type, type Schema } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
 import { GEMINI_EXTRACTION_MODEL } from "@/lib/ai/config";
-import { extractionJsonConfig } from "@/lib/ai/geminiConfig";
+import { extractionJsonConfig, jsonMimeConfig } from "@/lib/ai/geminiConfig";
 import {
   EXTRACTION_MODEL_FALLBACKS,
   isInvalidArgumentError,
@@ -39,7 +39,6 @@ const questionResponseSchema: Schema = {
           maxMarks: {
             type: Type.NUMBER,
             description: "Marks if clearly printed; omit if unknown",
-            nullable: true,
           },
         },
         required: ["id", "number", "text", "order"],
@@ -128,64 +127,76 @@ async function callGemini(
   let lastError: Error | null = null;
 
   for (const model of modelsToTryList) {
-    let responseText: string | undefined;
-    try {
-      const response = await client.models.generateContent({
-        model,
-        contents: [{ role: "user", parts }],
-        config: extractionJsonConfig(questionResponseSchema),
-      });
-      responseText = response.text;
+    const configs = [
+      { label: "schema", config: extractionJsonConfig(questionResponseSchema) },
+      { label: "mime", config: jsonMimeConfig() },
+      { label: "plain", config: undefined },
+    ];
 
-      if (!responseText) {
-        throw new Error("Gemini returned an empty question extraction response.");
-      }
-
-      let parsed: unknown;
+    for (const { label, config } of configs) {
+      let responseText: string | undefined;
       try {
-        parsed = JSON.parse(responseText);
-      } catch {
-        throw new Error("Gemini returned invalid JSON for question extraction.");
-      }
+        const response = await client.models.generateContent({
+          model,
+          contents: [{ role: "user", parts }],
+          ...(config ? { config } : {}),
+        });
+        responseText = response.text;
 
-      const validation = validateQuestions(parsed);
-      if (!validation.ok) {
-        console.error("Question validation failed:", {
+        if (!responseText) {
+          throw new Error("Gemini returned an empty question extraction response.");
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(responseText);
+        } catch {
+          throw new Error("Gemini returned invalid JSON for question extraction.");
+        }
+
+        const validation = validateQuestions(parsed);
+        if (!validation.ok) {
+          console.error("Question validation failed:", {
+            ...meta,
+            model,
+            config: label,
+            error: validation.error,
+            details: validation.details,
+            responsePreview: responseText.slice(0, 400),
+          });
+          throw new Error(
+            validation.details?.length
+              ? `${validation.error} ${validation.details.slice(0, 5).join("; ")}`
+              : validation.error,
+          );
+        }
+
+        if (model !== GEMINI_EXTRACTION_MODEL || label !== "schema") {
+          console.warn(
+            `[extract-questions] Used ${model} with ${label} config (configured: ${GEMINI_EXTRACTION_MODEL})`,
+          );
+        }
+
+        return validation.questions;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown Gemini error";
+        lastError = error instanceof Error ? error : new Error(message);
+
+        if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
+          console.warn(
+            `[extract-questions] Model ${model} (${label}) failed: ${message}`,
+          );
+          continue;
+        }
+
+        console.error("Gemini question extraction failed:", message, {
           ...meta,
           model,
-          error: validation.error,
-          details: validation.details,
-          responsePreview: responseText.slice(0, 400),
+          config: label,
         });
-        throw new Error(
-          validation.details?.length
-            ? `${validation.error} ${validation.details.slice(0, 5).join("; ")}`
-            : validation.error,
-        );
+        throw new Error(`Gemini question extraction failed: ${message}`);
       }
-
-      if (model !== GEMINI_EXTRACTION_MODEL) {
-        console.warn(
-          `[extract-questions] Used fallback model ${model} (configured: ${GEMINI_EXTRACTION_MODEL})`,
-        );
-      }
-
-      return validation.questions;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown Gemini error";
-      lastError = error instanceof Error ? error : new Error(message);
-
-      if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
-        console.warn(`[extract-questions] Model ${model} failed: ${message}`);
-        continue;
-      }
-
-      console.error("Gemini question extraction failed:", message, {
-        ...meta,
-        model,
-      });
-      throw new Error(`Gemini question extraction failed: ${message}`);
     }
   }
 

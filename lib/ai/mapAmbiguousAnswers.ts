@@ -25,8 +25,7 @@ const semanticBatchSchema: Schema = {
           candidateId: { type: Type.STRING },
           questionId: {
             type: Type.STRING,
-            nullable: true,
-            description: "Must be an existing question id, or null if no match",
+            description: "Must be an existing question id, or omit if no match",
           },
           confidence: {
             type: Type.NUMBER,

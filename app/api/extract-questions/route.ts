@@ -28,6 +28,10 @@ export async function POST(request: Request) {
     let preprocessMs = 0;
 
     if (isPdf(file.mimeType, file.fileName)) {
+      if (file.bytes.byteLength === 0) {
+        throw new Error("Uploaded PDF is empty.");
+      }
+
       // Send the original PDF to Gemini — rendered page images can be blank on
       // serverless when pdfjs font assets are missing from the function bundle.
       const preprocessStarted = Date.now();

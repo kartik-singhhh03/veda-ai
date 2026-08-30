@@ -16,17 +16,14 @@ const gradeSchema: Schema = {
   properties: {
     score: {
       type: Type.NUMBER,
-      nullable: true,
-      description: "Awarded marks; null when the question has no maxMarks",
+      description: "Awarded marks; omit when the question has no maxMarks",
     },
     maxScore: {
       type: Type.NUMBER,
-      nullable: true,
       description: "Must equal question maxMarks when present",
     },
     feedback: {
       type: Type.STRING,
-      nullable: true,
       description: "Concise teacher-facing feedback",
     },
   },

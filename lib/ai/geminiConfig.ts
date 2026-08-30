@@ -1,11 +1,17 @@
-import { ThinkingLevel, type Schema } from "@google/genai";
+import { type Schema } from "@google/genai";
 
-/** Structured JSON for Gemini 3.x (no temperature — deprecated on 3.x). */
+/** Structured JSON — no thinkingConfig (Gemini 3.x rejects it on flash-lite). */
 export function extractionJsonConfig(schema: Schema) {
   return {
     responseMimeType: "application/json" as const,
     responseSchema: schema,
-    thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+  };
+}
+
+/** JSON mime only — fallback when responseSchema + PDF triggers INVALID_ARGUMENT. */
+export function jsonMimeConfig() {
+  return {
+    responseMimeType: "application/json" as const,
   };
 }
 
@@ -13,7 +19,6 @@ export function gradingJsonConfig(schema: Schema) {
   return {
     responseMimeType: "application/json" as const,
     responseSchema: schema,
-    thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
   };
 }
 
