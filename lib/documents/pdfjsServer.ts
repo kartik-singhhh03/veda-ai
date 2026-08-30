@@ -1,15 +1,30 @@
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { definePDFJSModule } from "unpdf";
-
-const require = createRequire(import.meta.url);
 
 let pdfjsReady: Promise<void> | null = null;
 
-/** Resolve pdfjs-dist root via Node require — reliable on Vercel (unlike bundled import.meta.resolve). */
+function assetBase(root: string, subdir: string): string {
+  const dir = join(root, subdir);
+  return dir.endsWith("/") || dir.endsWith("\\") ? dir : `${dir}/`;
+}
+
+/**
+ * Resolve pdfjs-dist root on disk.
+ *
+ * Next.js production bundles can turn `require.resolve("pdfjs-dist/...")`
+ * into a numeric module id on Vercel, which then breaks `path.dirname`.
+ * Resolve from the project root instead.
+ */
 export function resolvePdfjsDistRoot(): string {
-  return dirname(require.resolve("pdfjs-dist/package.json"));
+  const fromNodeModules = join(process.cwd(), "node_modules", "pdfjs-dist");
+  if (existsSync(join(fromNodeModules, "package.json"))) {
+    return fromNodeModules;
+  }
+
+  const projectRequire = createRequire(join(process.cwd(), "package.json"));
+  return dirname(projectRequire.resolve("pdfjs-dist/package.json"));
 }
 
 /** Document options for Node/serverless PDF.js (fonts + CMaps from node_modules). */
@@ -18,8 +33,9 @@ export function getPdfjsDocumentOptions() {
   return {
     disableFontFace: true,
     useSystemFonts: true,
-    standardFontDataUrl: pathToFileURL(join(root, "standard_fonts/")).href,
-    cMapUrl: pathToFileURL(join(root, "cmaps/")).href,
+    // PDF.js Node backend uses fs.readFile — plain paths, not file:// URLs.
+    standardFontDataUrl: assetBase(root, "standard_fonts"),
+    cMapUrl: assetBase(root, "cmaps"),
     cMapPacked: true as const,
   };
 }

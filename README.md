@@ -183,7 +183,7 @@ PDF rendering uses `@napi-rs/canvas` (native, Node-compatible; listed in `server
 
 **Node.js 22.x** is required (`package.json` `engines`) so PDF.js and native canvas bindings match local/Vercel behavior.
 
-**PDF.js on Vercel / Turbopack:** the legacy worker must be preloaded on `globalThis.pdfjsWorker` (see `lib/documents/pdfjsServer.ts`). Dynamic `import(workerSrc)` breaks when Next externalizes `pdfjs-dist`.
+**PDF.js on Vercel / Turbopack:** preload the worker on `globalThis.pdfjsWorker` (see `lib/documents/pdfjsServer.ts`). Resolve font/CMap dirs from `process.cwd()/node_modules/pdfjs-dist` with plain filesystem paths — bundled `require.resolve` can return numeric module ids on Vercel.
 
 ### Payload / file-size assumptions
 
