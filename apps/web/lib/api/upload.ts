@@ -67,7 +67,7 @@ export async function readUploadFile(
 
   const buffer = Buffer.from(await value.arrayBuffer());
   return {
-    bytes: new Uint8Array(buffer),
+    bytes: Uint8Array.from(buffer),
     mimeType: mimeType || guessMimeFromName(fileName),
     fileName,
   };

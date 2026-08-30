@@ -1,8 +1,7 @@
 import { jsonError, readUploadFile } from "@/lib/api/upload";
 import { extractQuestions } from "@/lib/ai/extractQuestions";
 import { geminiRuntimeSummary } from "@/lib/ai/config";
-import { isPdfBytes } from "@/lib/documents/bytesToBase64";
-import { getPdfPageCount } from "@/lib/documents/pdfPageCount";
+import { validatePageImage } from "@/lib/documents/imageSignature";
 import { probePdfjsAssets } from "@/lib/documents/pdfjsServer";
 import { processDocument } from "@/lib/documents/processDocument";
 
@@ -25,63 +24,6 @@ export async function POST(request: Request) {
       file.mimeType === "application/pdf" ||
       file.fileName.toLowerCase().endsWith(".pdf");
 
-    // PDF question papers: send original bytes to Gemini (skip serverless canvas renders).
-    if (isPdfFile) {
-      const pdfBytes = new Uint8Array(file.bytes);
-      const preprocessStarted = Date.now();
-      let pageCount: number;
-
-      try {
-        pageCount = await getPdfPageCount(pdfBytes);
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : "Unknown error";
-        console.error("[extract-questions] pdf page count failed", {
-          sourceName: file.fileName,
-          pdfBytes: pdfBytes.byteLength,
-          hasPdfHeader: isPdfBytes(pdfBytes),
-          detail,
-        });
-        throw error;
-      }
-
-      const preprocessMs = Date.now() - preprocessStarted;
-
-      if (pageCount < 1) {
-        throw new Error("The uploaded PDF has no pages.");
-      }
-
-      console.info("[extract-questions] pdf-only preprocess", {
-        sourceName: file.fileName,
-        pageCount,
-        pdfBytes: pdfBytes.byteLength,
-        hasPdfHeader: isPdfBytes(pdfBytes),
-        pdfAssets: probePdfjsAssets(),
-        preprocessMs,
-      });
-
-      const extractStarted = Date.now();
-      const questions = await extractQuestions({
-        pages: [],
-        pdfFallback: { bytes: pdfBytes, pageCount },
-      });
-      const extractMs = Date.now() - extractStarted;
-
-      console.info("[extract-questions] done", {
-        sourceName: file.fileName,
-        pageCount,
-        questionCount: questions.length,
-        geminiMs: extractMs,
-        totalMs: Date.now() - started,
-        input: "pdf-only",
-      });
-
-      return Response.json({
-        questions,
-        pageCount,
-        sourceName: file.fileName,
-      });
-    }
-
     const preprocessStarted = Date.now();
     const document = await processDocument(
       file.bytes,
@@ -90,17 +32,27 @@ export async function POST(request: Request) {
     );
     const preprocessMs = Date.now() - preprocessStarted;
 
+    const pageDiagnostics = document.pages.map((page) => {
+      const check = validatePageImage(page.bytes, page.width, page.height);
+      return {
+        page: page.pageNumber,
+        bytes: page.bytes.byteLength,
+        width: page.width,
+        height: page.height,
+        mimeType: page.mimeType,
+        detectedMime: check.detectedMime,
+        headerHex: check.headerHex,
+        imageOk: check.ok,
+      };
+    });
+
     const pdfAssets = probePdfjsAssets();
     console.info("[extract-questions] preprocess", {
       sourceName: document.sourceName,
       pageCount: document.pageCount,
+      uploadBytes: file.bytes.byteLength,
       pdfAssets,
-      pageSizes: document.pages.map((p) => ({
-        page: p.pageNumber,
-        bytes: p.bytes.byteLength,
-        width: p.width,
-        height: p.height,
-      })),
+      pageDiagnostics,
       preprocessMs,
     });
 
@@ -108,7 +60,10 @@ export async function POST(request: Request) {
     const questions = await extractQuestions({
       pages: document.pages,
       pdfFallback: isPdfFile
-        ? { bytes: file.bytes, pageCount: document.pageCount }
+        ? {
+            bytes: Uint8Array.from(file.bytes),
+            pageCount: document.pageCount,
+          }
         : undefined,
     });
     const extractMs = Date.now() - extractStarted;
@@ -119,6 +74,7 @@ export async function POST(request: Request) {
       questionCount: questions.length,
       geminiMs: extractMs,
       totalMs: Date.now() - started,
+      input: "images",
     });
 
     return Response.json({

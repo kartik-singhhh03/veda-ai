@@ -17,11 +17,24 @@ export type GenerateExtractionOptions = {
   model?: string;
   /** Skip responseMimeType — use when JSON mode returns empty on vision. */
   plain?: boolean;
+  /** One model only — no fallback loop (saves quota during extraction). */
+  singleModel?: boolean;
 };
 
+function countInlineImages(parts: GeminiPart[]): number {
+  return parts.filter((part) => "inlineData" in part).length;
+}
+
+function promptCharLength(parts: GeminiPart[]): number {
+  return parts.reduce(
+    (sum, part) => sum + ("text" in part ? part.text.length : 0),
+    0,
+  );
+}
+
 /**
- * One Gemini vision call for extraction — avoids burning free-tier quota on
- * multi-model / multi-config retry loops.
+ * Gemini vision call for extraction.
+ * Default: one configured model. Set singleModel to skip fallback models.
  */
 export async function generateExtractionJson(
   parts: GeminiPart[],
@@ -29,17 +42,27 @@ export async function generateExtractionJson(
   options?: GenerateExtractionOptions,
 ): Promise<string> {
   const client = getGeminiClient();
-  let model = options?.model ?? GEMINI_EXTRACTION_MODEL;
-  const fallbacks = [
-    model,
-    ...(model !== EXTRACTION_MODEL_DEFAULT ? [EXTRACTION_MODEL_DEFAULT] : []),
-    ...(model !== GRADING_MODEL_DEFAULT ? [GRADING_MODEL_DEFAULT] : []),
-  ];
+  const primary = options?.model ?? GEMINI_EXTRACTION_MODEL;
+  const models = options?.singleModel
+    ? [primary]
+    : [
+        primary,
+        ...(primary !== EXTRACTION_MODEL_DEFAULT ? [EXTRACTION_MODEL_DEFAULT] : []),
+        ...(primary !== GRADING_MODEL_DEFAULT ? [GRADING_MODEL_DEFAULT] : []),
+      ];
+
+  console.info(`[${logPrefix}] request`, {
+    model: primary,
+    singleModel: Boolean(options?.singleModel),
+    partCount: parts.length,
+    sentImages: countInlineImages(parts),
+    promptChars: promptCharLength(parts),
+    plain: Boolean(options?.plain),
+  });
 
   let lastError: Error | null = null;
 
-  for (const candidate of fallbacks) {
-    model = candidate;
+  for (const model of models) {
     try {
       const response = await client.models.generateContent({
         model,
@@ -47,15 +70,24 @@ export async function generateExtractionJson(
         config: options?.plain ? undefined : jsonMimeConfig(),
       });
 
-      const text = response.text?.trim();
+      const text = response.text?.trim() ?? "";
+      const finishReason =
+        response.candidates?.[0]?.finishReason ?? "unknown";
+
+      console.info(`[${logPrefix}] response`, {
+        model,
+        responseChars: text.length,
+        finishReason,
+      });
+
       if (!text) {
         lastError = new Error("Gemini returned an empty response.");
         continue;
       }
 
-      if (model !== GEMINI_EXTRACTION_MODEL) {
+      if (model !== primary) {
         console.warn(
-          `[${logPrefix}] Used model ${model} (configured: ${GEMINI_EXTRACTION_MODEL})`,
+          `[${logPrefix}] Used fallback model ${model} (requested: ${primary})`,
         );
       }
 
@@ -71,11 +103,11 @@ export async function generateExtractionJson(
         );
       }
 
-      if (
-        isModelNotFoundError(message) ||
-        isInvalidArgumentError(message)
-      ) {
+      if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
         console.warn(`[${logPrefix}] Model ${model} unavailable: ${message}`);
+        if (options?.singleModel) {
+          throw new Error(message);
+        }
         continue;
       }
 

@@ -1,4 +1,5 @@
-import { bytesToBase64, isPdfBytes } from "@/lib/documents/bytesToBase64";
+import { bytesToBase64 } from "@/lib/documents/bytesToBase64";
+import { validatePageImage } from "@/lib/documents/imageSignature";
 import { looksLikeBlankRenders } from "@/lib/documents/pageRenderQuality";
 import { pageToBase64 } from "@/lib/documents/processDocument";
 import { generateExtractionJson } from "@/lib/ai/generateExtraction";
@@ -7,15 +8,16 @@ import {
   parseGeminiJson,
 } from "@/lib/ai/parseGeminiJson";
 import { GRADING_MODEL_DEFAULT } from "@/lib/ai/resolveModel";
-import {
-  isInvalidArgumentError,
-  isModelNotFoundError,
-  isQuotaError,
-} from "@/lib/ai/resolveModel";
+import { isQuotaError } from "@/lib/ai/resolveModel";
 import { validateQuestions } from "@/lib/ai/validateQuestions";
 import type { DocumentPage, Question } from "@vedaai/types";
 
-const QUESTION_PROMPT = `You are extracting exam questions from a scanned/printed question paper.
+/** One multimodal model for question extraction — avoids lite-model empty vision results. */
+const QUESTION_EXTRACTION_MODEL = GRADING_MODEL_DEFAULT;
+
+const QUESTION_PROMPT = `You are extracting printed exam questions from a question paper image.
+
+The attached image(s) are page scans from a question paper. Read the printed question text visible in the image(s).
 
 Rules:
 1. Extract EVERY printed question in reading order.
@@ -29,7 +31,7 @@ Rules:
 9. Set order to the actual printed sequence starting at 0 for the first question, then 1, 2, ...
 10. Set id to the same value as number when possible.
 
-You MUST return at least one question if any question text is visible.
+You MUST return at least one question when any printed question text is visible in the image(s).
 
 Return JSON only: { "questions": [ { "id", "number", "text", "order", "maxMarks"? } ] }`;
 
@@ -45,9 +47,7 @@ type GeminiPart =
 type ExtractAttempt = {
   parts: GeminiPart[];
   label: string;
-  meta: Record<string, unknown>;
-  model?: string;
-  plain?: boolean;
+  input: "images" | "pdf";
 };
 
 function buildPdfParts(bytes: Uint8Array, pageCount: number): GeminiPart[] {
@@ -69,7 +69,7 @@ function buildImageParts(pages: DocumentPage[]): GeminiPart[] {
   const parts: GeminiPart[] = [
     { text: QUESTION_PROMPT },
     {
-      text: `The document has ${pages.length} page image(s). Images follow in page order starting at page 1.`,
+      text: `The question paper has ${pages.length} page image(s). Each image is a scan of one printed page. Images follow in page order starting at page 1.`,
     },
   ];
 
@@ -86,48 +86,57 @@ function buildImageParts(pages: DocumentPage[]): GeminiPart[] {
   return parts;
 }
 
-function mergeQuestions(chunks: Question[][]): Question[] {
-  const byId = new Map<string, Question>();
-  for (const question of chunks.flat()) {
-    if (!byId.has(question.id)) {
-      byId.set(question.id, question);
+function validatePagesForExtraction(pages: DocumentPage[]): void {
+  for (const page of pages) {
+    const check = validatePageImage(page.bytes, page.width, page.height);
+    if (!check.ok) {
+      throw new Error(
+        `Page ${page.pageNumber} image is invalid (${check.reason ?? "unknown"}).`,
+      );
+    }
+    if (check.detectedMime && check.detectedMime !== page.mimeType) {
+      console.warn("[extract-questions] mime mismatch", {
+        page: page.pageNumber,
+        declared: page.mimeType,
+        detected: check.detectedMime,
+        headerHex: check.headerHex,
+      });
     }
   }
-  return [...byId.values()].sort((a, b) => a.order - b.order);
 }
 
 function pageMeta(pages: DocumentPage[]) {
   return {
     pageCount: pages.length,
-    pageSizes: pages.map((p) => ({
-      page: p.pageNumber,
-      bytes: p.bytes.byteLength,
-      width: p.width,
-      height: p.height,
-    })),
+    pageBytes: pages.map((page) => page.bytes.byteLength),
+    pageHeaders: pages.map((page) =>
+      validatePageImage(page.bytes, page.width, page.height).headerHex,
+    ),
+    mimeTypes: pages.map((page) => page.mimeType),
   };
 }
 
-let lastExtractDebug = "";
-
 async function extractOnce(attempt: ExtractAttempt): Promise<Question[] | null> {
-  const { parts, label, meta, model, plain } = attempt;
+  const { parts, label, input } = attempt;
 
   try {
     const responseText = await generateExtractionJson(
       parts,
       `extract-questions:${label}`,
-      { model, plain },
+      {
+        model: QUESTION_EXTRACTION_MODEL,
+        plain: true,
+        singleModel: true,
+      },
     );
-
-    lastExtractDebug = `[${label}] ${responseText.slice(0, 200)}`;
 
     let parsed: unknown;
     try {
       parsed = normalizeQuestionsPayload(parseGeminiJson(responseText));
     } catch {
       console.warn(`[extract-questions:${label}] invalid JSON`, {
-        ...meta,
+        input,
+        responseChars: responseText.length,
         preview: responseText.slice(0, 300),
       });
       return null;
@@ -136,36 +145,30 @@ async function extractOnce(attempt: ExtractAttempt): Promise<Question[] | null> 
     const validation = validateQuestions(parsed);
     if (!validation.ok) {
       console.warn(`[extract-questions:${label}] validation failed`, {
-        ...meta,
+        input,
         error: validation.error,
         details: validation.details,
+        responseChars: responseText.length,
         preview: responseText.slice(0, 300),
       });
       return null;
     }
 
     console.info(`[extract-questions:${label}] ok`, {
-      ...meta,
+      input,
+      model: QUESTION_EXTRACTION_MODEL,
       questionCount: validation.questions.length,
-      model: model ?? "default",
-      plain: Boolean(plain),
     });
     return validation.questions;
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown Gemini error";
-    lastExtractDebug = `[${label}] error: ${message.slice(0, 200)}`;
 
     if (isQuotaError(message)) {
       throw new Error(message);
     }
 
-    if (isModelNotFoundError(message) || isInvalidArgumentError(message)) {
-      console.warn(`[extract-questions:${label}] Gemini call failed: ${message}`, meta);
-      return null;
-    }
-
-    console.error(`[extract-questions:${label}] failed: ${message}`, meta);
+    console.error(`[extract-questions:${label}] failed`, { input, message });
     throw new Error(
       message.includes("quota")
         ? message
@@ -178,99 +181,60 @@ export async function extractQuestions(
   input: ExtractQuestionsInput,
 ): Promise<Question[]> {
   const { pages, pdfFallback } = input;
-  const hasPdf = Boolean(
-    pdfFallback &&
-      pdfFallback.pageCount > 0 &&
-      pdfFallback.bytes.byteLength > 0,
-  );
-  const rendersBlank = looksLikeBlankRenders(pages);
 
-  if (pages.length === 0 && !hasPdf) {
-    throw new Error(
-      "No pages available for question extraction. Upload a PDF with at least one page or a PNG/JPG scan.",
-    );
+  if (pages.length === 0) {
+    throw new Error("No pages available for question extraction.");
   }
 
+  validatePagesForExtraction(pages);
+
+  const rendersBlank = looksLikeBlankRenders(pages);
   const meta = {
     ...pageMeta(pages),
     rendersBlank,
     pdfBytes: pdfFallback?.bytes.byteLength ?? 0,
   };
-  lastExtractDebug = "";
 
-  if (pdfFallback && pdfFallback.bytes.byteLength > 0 && !isPdfBytes(pdfFallback.bytes)) {
-    console.error("[extract-questions] uploaded bytes are not a valid PDF header", {
-      byteLength: pdfFallback.bytes.byteLength,
-      header: bytesToBase64(pdfFallback.bytes.slice(0, 8)),
-    });
-  }
+  console.info("[extract-questions] start", {
+    ...meta,
+    model: QUESTION_EXTRACTION_MODEL,
+    sentImages: pages.length,
+  });
 
-  const attempts: ExtractAttempt[] = [];
+  const hasPdf =
+    pdfFallback &&
+    pdfFallback.pageCount > 0 &&
+    pdfFallback.bytes.byteLength > 0;
 
-  if (hasPdf && pdfFallback) {
-    const { bytes, pageCount } = pdfFallback;
-    // Plain text first — JSON mime + inline PDF often returns empty on Gemini 3.x.
-    attempts.push({
-      parts: buildPdfParts(bytes, pageCount),
-      label: "pdf-plain",
-      meta: { ...meta, input: "pdf" },
-      plain: true,
-    });
-    attempts.push({
-      parts: buildPdfParts(bytes, pageCount),
+  // Prefer PDF when serverless renders are blank (~7 KB white PNGs on Vercel).
+  if (rendersBlank && hasPdf && pdfFallback) {
+    console.warn(
+      "[extract-questions] blank renders detected — using PDF input for Gemini",
+      meta,
+    );
+    const pdfResult = await extractOnce({
+      parts: buildPdfParts(pdfFallback.bytes, pdfFallback.pageCount),
       label: "pdf",
-      meta: { ...meta, input: "pdf" },
+      input: "pdf",
     });
-    attempts.push({
-      parts: buildPdfParts(bytes, pageCount),
-      label: "pdf-3.6",
-      meta: { ...meta, input: "pdf" },
-      model: GRADING_MODEL_DEFAULT,
-      plain: true,
-    });
+    if (pdfResult && pdfResult.length > 0) {
+      return pdfResult;
+    }
   }
 
-  if (pages.length > 0 && !rendersBlank) {
-    attempts.push({
+  if (!rendersBlank) {
+    const imageResult = await extractOnce({
       parts: buildImageParts(pages),
       label: "images",
-      meta: { ...meta, input: "images" },
+      input: "images",
     });
-  } else if (rendersBlank) {
-    console.warn("[extract-questions] skipping image attempts — PDF renders look blank", meta);
-  }
-
-  for (const attempt of attempts) {
-    const result = await extractOnce(attempt);
-    if (result && result.length > 0) {
-      return result;
+    if (imageResult && imageResult.length > 0) {
+      return imageResult;
     }
+    throw new Error("No questions were extracted from the document.");
   }
 
-  if (pages.length > 1 && !rendersBlank) {
-    const perPage: Question[][] = [];
-    for (const page of pages) {
-      const chunk = await extractOnce({
-        parts: buildImageParts([page]),
-        label: `page-${page.pageNumber}`,
-        meta: { ...meta, input: "images", singlePage: page.pageNumber },
-      });
-      if (chunk && chunk.length > 0) {
-        perPage.push(chunk);
-      }
-    }
-    const merged = mergeQuestions(perPage);
-    if (merged.length > 0) return merged;
-  }
-
-  if (rendersBlank && !hasPdf) {
-    throw new Error(
-      "No questions were extracted — PDF page renders look blank on the server. Try exporting the PDF again or upload PNG/JPG scans.",
-    );
-  }
-
-  const debugHint = lastExtractDebug
-    ? ` Last response: ${lastExtractDebug}`
-    : "";
-  throw new Error(`No questions were extracted from the document.${debugHint}`);
+  throw new Error(
+    "No questions were extracted — PDF page renders look blank on the server and PDF fallback returned no questions.",
+  );
 }
