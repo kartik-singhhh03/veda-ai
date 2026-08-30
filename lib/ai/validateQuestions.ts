@@ -4,20 +4,43 @@ export type QuestionValidationResult =
   | { ok: true; questions: Question[] }
   | { ok: false; error: string; details?: string[] };
 
+function parseOrder(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number.parseInt(value.trim(), 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return NaN;
+}
+
 export function validateQuestions(raw: unknown): QuestionValidationResult {
   const details: string[] = [];
 
   if (!raw || typeof raw !== "object") {
-    return { ok: false, error: "Question extraction response was not an object." };
+    return {
+      ok: false,
+      error: "Question extraction response was not an object.",
+      details: [`typeof response: ${typeof raw}`],
+    };
   }
 
   const questionsUnknown = (raw as { questions?: unknown }).questions;
   if (!Array.isArray(questionsUnknown)) {
-    return { ok: false, error: "Question extraction missing questions array." };
+    return {
+      ok: false,
+      error: "Question extraction missing questions array.",
+      details: [`questions field: ${String(questionsUnknown)}`],
+    };
   }
 
   if (questionsUnknown.length === 0) {
-    return { ok: false, error: "No questions were extracted from the document." };
+    return {
+      ok: false,
+      error: "No questions were extracted from the document.",
+      details: ["Gemini returned an empty questions array."],
+    };
   }
 
   const questions: Question[] = [];
@@ -35,7 +58,7 @@ export function validateQuestions(raw: unknown): QuestionValidationResult {
     const number =
       typeof record.number === "string" ? record.number.trim() : "";
     const text = typeof record.text === "string" ? record.text.trim() : "";
-    const order = typeof record.order === "number" ? record.order : NaN;
+    const order = parseOrder(record.order);
     const idRaw =
       typeof record.id === "string" && record.id.trim()
         ? record.id.trim()

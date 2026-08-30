@@ -1,6 +1,7 @@
-import { Type, type Schema } from "@google/genai";
+import { Type, type Schema, ThinkingLevel } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
 import { GEMINI_MODEL } from "@/lib/ai/config";
+import { structuredJsonConfig } from "@/lib/ai/geminiConfig";
 import { SEMANTIC_MATCH_THRESHOLD } from "@/lib/mapping/constants";
 import { buildQuestionIndex } from "@/lib/mapping/buildQuestionIndex";
 import { normalizeQuestionId } from "@/lib/mapping/normalizeQuestionId";
@@ -92,11 +93,7 @@ Return one match object per candidate id.`;
     const response = await client.models.generateContent({
       model: GEMINI_MODEL,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: semanticBatchSchema,
-        temperature: 0.1,
-      },
+      config: structuredJsonConfig(semanticBatchSchema, ThinkingLevel.MEDIUM),
     });
 
     if (!response.text) {

@@ -27,6 +27,12 @@ export async function POST(request: Request) {
       sourceName: document.sourceName,
       pageCount: document.pageCount,
       questionCount: questions.length,
+      pageSizes: document.pages.map((p) => ({
+        page: p.pageNumber,
+        bytes: p.bytes.byteLength,
+        width: p.width,
+        height: p.height,
+      })),
       preprocessMs,
       geminiMs: extractMs,
       totalMs: Date.now() - started,

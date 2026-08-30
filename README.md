@@ -168,7 +168,8 @@ npm run lint
 1. Push the repository to GitHub.
 2. Import the project in Vercel.
 3. Set environment variable **`GEMINI_API_KEY`** in the Vercel project settings.
-4. Deploy.
+4. Optional: **`GEMINI_EXTRACTION_MODEL`** (defaults to `gemini-3.5-flash-lite` for vision/JSON extraction; grading uses `gemini-3.6-flash` in `lib/ai/config.ts`).
+5. Deploy.
 
 ### Runtime / duration
 

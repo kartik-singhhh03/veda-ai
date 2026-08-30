@@ -1,6 +1,7 @@
-import { Type, type Schema } from "@google/genai";
+import { Type, type Schema, ThinkingLevel } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
 import { GEMINI_MODEL } from "@/lib/ai/config";
+import { structuredJsonConfig } from "@/lib/ai/geminiConfig";
 import { validateGradeResult } from "@/lib/ai/validateGrade";
 import type { Answer, GradeResult, Question } from "@/types/assessment";
 
@@ -68,11 +69,7 @@ Rules:
     const response = await client.models.generateContent({
       model: GEMINI_MODEL,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: gradeSchema,
-        temperature: 0.1,
-      },
+      config: structuredJsonConfig(gradeSchema, ThinkingLevel.MEDIUM),
     });
     responseText = response.text;
   } catch (error) {

@@ -1,6 +1,7 @@
 import { Type, type Schema } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
-import { GEMINI_MODEL } from "@/lib/ai/config";
+import { GEMINI_EXTRACTION_MODEL } from "@/lib/ai/config";
+import { structuredJsonConfig } from "@/lib/ai/geminiConfig";
 import { pageToBase64 } from "@/lib/documents/processDocument";
 import { validateAnswerCandidates } from "@/lib/ai/validateAnswers";
 import type { AnswerCandidate, DocumentPage } from "@/types/assessment";
@@ -109,13 +110,9 @@ export async function extractAnswers(
   let responseText: string | undefined;
   try {
     const response = await client.models.generateContent({
-      model: GEMINI_MODEL,
+      model: GEMINI_EXTRACTION_MODEL,
       contents: [{ role: "user", parts }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: answerResponseSchema,
-        temperature: 0.1,
-      },
+      config: structuredJsonConfig(answerResponseSchema),
     });
     responseText = response.text;
   } catch (error) {

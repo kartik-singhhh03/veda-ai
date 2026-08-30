@@ -1,6 +1,7 @@
 import { Type, type Schema } from "@google/genai";
 import { getGeminiClient } from "@/lib/ai/client";
-import { GEMINI_MODEL } from "@/lib/ai/config";
+import { GEMINI_EXTRACTION_MODEL } from "@/lib/ai/config";
+import { structuredJsonConfig } from "@/lib/ai/geminiConfig";
 import { pageToBase64 } from "@/lib/documents/processDocument";
 import { validateQuestions } from "@/lib/ai/validateQuestions";
 import type { DocumentPage, Question } from "@/types/assessment";
@@ -82,18 +83,19 @@ export async function extractQuestions(
         data: pageToBase64(page),
       },
     });
+    if (page.bytes.byteLength < 2_000) {
+      console.warn(
+        `[extract-questions] Page ${page.pageNumber} render is very small (${page.bytes.byteLength} bytes) — Gemini may not read it.`,
+      );
+    }
   }
 
   let responseText: string | undefined;
   try {
     const response = await client.models.generateContent({
-      model: GEMINI_MODEL,
+      model: GEMINI_EXTRACTION_MODEL,
       contents: [{ role: "user", parts }],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: questionResponseSchema,
-        temperature: 0.1,
-      },
+      config: structuredJsonConfig(questionResponseSchema),
     });
     responseText = response.text;
   } catch (error) {
@@ -115,7 +117,13 @@ export async function extractQuestions(
 
   const validation = validateQuestions(parsed);
   if (!validation.ok) {
-    console.error("Question validation failed:", validation.details);
+    console.error("Question validation failed:", {
+      error: validation.error,
+      details: validation.details,
+      model: GEMINI_EXTRACTION_MODEL,
+      pageCount: pages.length,
+      responsePreview: responseText.slice(0, 400),
+    });
     throw new Error(
       validation.details?.length
         ? `${validation.error} ${validation.details.slice(0, 5).join("; ")}`
